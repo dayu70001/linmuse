@@ -27,10 +27,10 @@ export function FeedbackGallery({ images }: { images: FeedbackImage[] }) {
 
   return (
     <>
-      <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4">
         {images.map((image, index) => (
           <button
-            className="group rounded-xl border border-line/70 bg-white p-2 text-left transition hover:border-gold"
+            className="group rounded-xl border border-line/70 bg-white p-1.5 text-left transition hover:border-gold sm:p-2"
             key={`${image.src}-${index}`}
             onClick={() => setActiveIndex(index)}
             type="button"
@@ -38,7 +38,7 @@ export function FeedbackGallery({ images }: { images: FeedbackImage[] }) {
             <span className="block rounded-lg bg-paper p-1.5">
               <img
                 alt={image.alt}
-                className="h-auto w-full rounded-md object-contain transition group-hover:scale-[1.005]"
+                className="h-52 w-full rounded-md object-contain transition group-hover:scale-[1.005] sm:h-80 lg:h-[420px]"
                 decoding="async"
                 loading="lazy"
                 src={image.src}

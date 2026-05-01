@@ -1,12 +1,10 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ProductCard } from "@/components/ProductCard";
-import { siteConfig } from "@/config/site";
 import { categories } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
-import { whatsappUrl } from "@/lib/whatsapp";
 
 const pageSize = 24;
 const filters = ["All", ...categories];
@@ -23,29 +21,6 @@ export function CatalogGrid({
   const [filter, setFilter] = useState(initialCategory);
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(pageSize);
-  const [whatsappWholesale, setWhatsappWholesale] = useState(siteConfig.whatsappWholesale);
-
-  useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) {
-      return;
-    }
-
-    fetch(`${url}/rest/v1/site_settings?key=eq.whatsapp_wholesale&select=value`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-    })
-      .then((response) => (response.ok ? response.json() : []))
-      .then((rows: Array<{ value?: string }>) => {
-        if (rows[0]?.value) {
-          setWhatsappWholesale(rows[0].value);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
 
   const filteredProducts = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -62,8 +37,8 @@ export function CatalogGrid({
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
   return (
-    <div className="mt-10">
-      <div className="grid gap-4 rounded-lg border border-line bg-paper p-4 lg:grid-cols-[1fr_auto]">
+    <div className="mt-7">
+      <div className="grid gap-3 rounded-lg border border-line bg-paper p-3 lg:grid-cols-[1fr_auto]">
         <label className="flex min-h-11 items-center gap-3 rounded border border-line bg-white px-4">
           <Search size={18} className="text-muted" />
           <input
@@ -76,11 +51,11 @@ export function CatalogGrid({
             value={query}
           />
         </label>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {filters.map((item) => (
             <button
               aria-pressed={filter === item}
-              className="min-h-11 shrink-0 rounded border border-line bg-white px-4 text-sm font-bold text-muted aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-white"
+              className="min-h-10 shrink-0 rounded border border-line bg-white px-3 text-xs font-bold text-muted aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-white sm:text-sm"
               key={item}
               onClick={() => {
                 setFilter(item);
@@ -94,13 +69,9 @@ export function CatalogGrid({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-3 min-[390px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:gap-4 xl:grid-cols-5">
         {visibleProducts.map((product) => (
           <ProductCard
-            inquiryHref={whatsappUrl(
-              whatsappWholesale,
-              `Hi, I want to ask about ${product.product_code} - ${product.title_en}. Please send price, delivery, and order details.`
-            )}
             product={product}
             key={product.product_code}
           />

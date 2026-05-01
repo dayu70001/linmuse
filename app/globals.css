@@ -33,11 +33,11 @@ img {
   }
 
   .eyebrow {
-    @apply text-[11px] font-bold uppercase tracking-[0.2em] text-gold;
+    @apply text-[10px] font-bold uppercase tracking-[0.18em] text-gold sm:text-[11px];
   }
 
   .section-pad {
-    @apply py-10 sm:py-16 lg:py-20;
+    @apply py-8 sm:py-12 lg:py-16;
   }
 
   .btn-primary {

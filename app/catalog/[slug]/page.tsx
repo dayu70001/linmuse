@@ -1,10 +1,9 @@
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { products } from "@/data/products";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { getCatalogProductBySlug } from "@/lib/products";
-import { productInquiryUrl } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -44,27 +43,26 @@ export default async function ProductDetailPage({
             Back to catalog
           </Link>
 
-          <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_0.82fr] lg:gap-10">
+          <div className="mt-6 grid gap-7 lg:grid-cols-[1fr_0.82fr] lg:gap-10">
             <ProductImageGallery images={galleryImages} thumbnailImages={galleryThumbnails} title={product.title_en} />
 
             <div className="lg:pt-4">
               <p className="eyebrow">{product.category}</p>
-              <h1 className="mt-3 font-serif text-3xl leading-tight text-ink sm:text-5xl">
+              <h1 className="mt-3 font-serif text-2xl leading-tight text-ink sm:text-4xl">
                 {product.title_en}
               </h1>
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 <span className="rounded bg-paper px-3 py-2 text-sm font-bold text-ink">{product.product_code}</span>
               </div>
-              <p className="mt-6 text-base leading-7 text-muted">{product.description_en}</p>
-              <div className="mt-6 space-y-3 border-y border-line py-5 text-sm font-semibold text-ink">
-                <p>{product.moq || "From 1 piece"} · {product.delivery_time || "7-12 business days"}</p>
-                <p>Sizes & colors: Contact us for current availability.</p>
+              <p className="mt-5 text-sm leading-6 text-muted sm:text-base sm:leading-7">{product.description_en}</p>
+              <div className="mt-5 space-y-2 border-y border-line py-4 text-sm font-semibold text-ink">
+                <p>Sizes: As per product description.</p>
+                <p>Colors: Common / varies by batch.</p>
+                <p>Delivery: {product.delivery_time || "7-12 business days"}.</p>
               </div>
-
-              <Link className="btn-primary mt-7 w-full sm:w-auto" href={productInquiryUrl(product)}>
-                <MessageCircle size={18} />
-                Ask price and delivery
-              </Link>
+              <p className="mt-5 rounded-lg bg-paper px-4 py-3 text-sm leading-6 text-muted">
+                Save the product ID or screenshot this page, then contact our team separately for price, size, color, and delivery details.
+              </p>
             </div>
           </div>
         </div>

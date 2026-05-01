@@ -17,7 +17,7 @@ export default async function CatalogPage({
           <SectionHeading
             eyebrow="Catalog"
             title="Shop Apparel, Shoes, Watches & Bags"
-            text="Browse selected factory-direct products for retail and wholesale orders. Search by product ID or title, then send the product ID for current price and delivery details."
+            text="Browse selected factory-direct products for retail and wholesale orders. Search by product ID or title, then save the product ID or screenshot for later."
           />
           <CatalogGrid initialCategory={params?.category || "All"} products={products} />
         </div>

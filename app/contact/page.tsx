@@ -1,43 +1,39 @@
-import { Mail, MessageCircle, PackageCheck, Send } from "lucide-react";
+import { Mail, Send, Share2, Users } from "lucide-react";
 import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { getSetting, getSiteSettings } from "@/lib/siteData";
-import { whatsappUrl } from "@/lib/whatsapp";
 
 export default async function ContactPage() {
   const settings = await getSiteSettings();
-  const whatsappRetail = getSetting(settings, "whatsapp_retail") || siteConfig.whatsappRetail;
-  const whatsappWholesale = getSetting(settings, "whatsapp_wholesale") || siteConfig.whatsappWholesale;
-  const whatsappAfterSales = getSetting(settings, "whatsapp_after_sales") || siteConfig.whatsappAfterSales;
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
   const email = getSetting(settings, "email") || siteConfig.email;
   const cards = [
     {
-      title: "Retail Order",
-      text: "Ask for single-piece availability, size options, delivery time, and product details.",
-      icon: MessageCircle,
-      href: whatsappUrl(whatsappRetail, "Hi, I want to ask about retail order options."),
-    },
-    {
-      title: "Wholesale Inquiry",
-      text: "Send product IDs, quantity, size range, and destination country for quotation support.",
-      icon: MessageCircle,
-      href: whatsappUrl(whatsappWholesale, "Hi, I want to ask about wholesale products."),
-    },
-    {
-      title: "Shipping & After-sales",
-      text: "Send order details and photos for shipping or after-sales support.",
-      icon: PackageCheck,
-      href: whatsappUrl(whatsappAfterSales, "Hi, I need shipping or after-sales support."),
-    },
-    {
-      title: "Daily Updates Channel",
-      text: "Follow daily new arrivals, packing videos, and buyer updates.",
+      title: "Telegram Group",
+      text: "Join daily product updates, new arrivals, shipping proof, and buyer updates.",
       icon: Send,
       href: telegram || "/contact",
+    },
+    {
+      title: "WhatsApp Group",
+      text: "Use the group/community channel when available for product updates and announcements.",
+      icon: Users,
+      href: "/contact",
+    },
+    {
+      title: "Instagram",
+      text: "Follow selected product previews and visual updates.",
+      icon: Share2,
+      href: instagram || "/contact",
+    },
+    {
+      title: "Facebook",
+      text: "Follow brand and catalog updates.",
+      icon: Share2,
+      href: facebook || "/contact",
     },
   ];
 
@@ -47,8 +43,8 @@ export default async function ContactPage() {
         <div className="container-page">
           <SectionHeading
             eyebrow="Contact"
-            title="Choose the right contact channel"
-            text="Use the correct contact card so retail orders, wholesale inquiries, and shipping support can be handled clearly."
+            title="Follow and Contact LM Dkbrand"
+            text="Browse the catalog first, then save product IDs or screenshots before contacting our team through the available channels."
           />
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {cards.map((card) => {
@@ -67,9 +63,10 @@ export default async function ContactPage() {
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="card p-6">
-              <h2 className="font-serif text-2xl text-ink">Social channels</h2>
+              <h2 className="font-serif text-2xl text-ink">Customer Support</h2>
               <div className="mt-5 grid gap-3 text-sm font-semibold text-muted sm:grid-cols-2">
-                <Link href={telegram || "/contact"}>Telegram Channel</Link>
+                <Link href={telegram || "/contact"}>Telegram Group</Link>
+                <Link href="/contact">WhatsApp Group</Link>
                 <Link href={instagram || "/contact"}>Instagram</Link>
                 <Link href={facebook || "/contact"}>Facebook</Link>
                 <Link href={`mailto:${email}`}>
@@ -79,10 +76,10 @@ export default async function ContactPage() {
               </div>
             </div>
             <div className="card bg-paper p-6">
-              <h2 className="font-serif text-2xl text-ink">Inquiry details</h2>
+              <h2 className="font-serif text-2xl text-ink">Catalog notes</h2>
               <div className="mt-4 grid gap-3 text-sm leading-6 text-muted">
-                <p>For retail orders, send product ID, size, color, and destination.</p>
-                <p>For wholesale orders, send product IDs, quantity, size range, and destination country.</p>
+                <p>For retail orders, save product ID, size, color, and destination details.</p>
+                <p>For wholesale orders, prepare product IDs, quantity, size range, and destination country.</p>
                 <p className="font-semibold text-ink">Typical response time: within 24 hours.</p>
               </div>
             </div>

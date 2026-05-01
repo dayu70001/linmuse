@@ -51,17 +51,17 @@ export default async function ShippingProofPage() {
 
   return (
     <main className="bg-white">
-      <section className="section-pad">
+      <section className="py-8 sm:py-10 lg:py-12">
         <div className="container-page">
           <SectionHeading
             eyebrow="Trust proof"
             title="Order & Shipping Proof"
             text="Packing, dispatch, and warehouse updates help buyers review the order process."
           />
-          <p className="mx-auto mt-5 max-w-2xl rounded bg-paper px-4 py-3 text-center text-sm font-semibold text-muted">
+          <p className="mx-auto mt-4 max-w-2xl rounded bg-paper px-4 py-3 text-center text-sm font-semibold text-muted">
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
-          <div className="mt-7 grid gap-4 md:grid-cols-3">
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
             {proofSections.map((section) => {
               const Icon = section.icon;
               return (
@@ -73,10 +73,10 @@ export default async function ShippingProofPage() {
                   loading="lazy"
                   decoding="async"
                 />
-                <div className="p-5 sm:p-7">
-                  <Icon className="text-gold" size={30} />
-                  <h2 className="mt-5 font-serif text-2xl text-ink sm:text-3xl">{section.title}</h2>
-                  <p className="mt-3 text-sm leading-6 text-muted">{section.text}</p>
+                <div className="p-4">
+                  <Icon className="text-gold" size={24} />
+                  <h2 className="mt-3 font-serif text-xl text-ink sm:text-2xl">{section.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted">{section.text}</p>
                 </div>
               </article>
             );
@@ -85,14 +85,14 @@ export default async function ShippingProofPage() {
         </div>
       </section>
 
-      <section className="section-pad bg-paper">
+      <section className="bg-paper py-8 sm:py-10 lg:py-12">
         <div className="container-page">
           <SectionHeading
             eyebrow="Buyer feedback"
             title="Customer Feedback Gallery"
             text="Real buyer feedback is displayed with private information hidden."
           />
-          <p className="mt-4 max-w-2xl rounded bg-white px-4 py-3 text-sm font-semibold text-muted">
+          <p className="mx-auto mt-4 max-w-2xl rounded bg-white px-4 py-3 text-center text-sm font-semibold text-muted">
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
           <FeedbackGallery images={feedbackImages} />

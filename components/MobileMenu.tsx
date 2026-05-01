@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function MobileMenu() {
+export default function MobileMenu({ telegramHref = "/contact" }: { telegramHref?: string }) {
   const links = [
     { label: "Home", href: "/" },
     { label: "Catalog", href: "/catalog" },
@@ -33,10 +33,10 @@ export default function MobileMenu() {
           ))}
 
           <Link
-            href="/contact"
+            href={telegramHref}
             className="mt-2 rounded-full bg-[#111111] px-5 py-3 text-center text-base font-semibold text-white"
           >
-            Contact on WhatsApp
+            Join Telegram Group
           </Link>
         </nav>
       </div>
