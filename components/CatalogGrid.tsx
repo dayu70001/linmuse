@@ -1,7 +1,8 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProductCard } from "@/components/ProductCard";
 import { categories } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
@@ -18,9 +19,14 @@ export function CatalogGrid({
   initialCategory?: string;
   products: CatalogProduct[];
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const gridTopRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState(initialCategory);
   const [query, setQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(pageSize);
+  const pageFromUrl = Math.max(1, Number(searchParams.get("page") || 1) || 1);
+  const [currentPage, setCurrentPage] = useState(pageFromUrl);
 
   const filteredProducts = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -34,10 +40,62 @@ export function CatalogGrid({
     });
   }, [filter, onlyNew, query]);
 
-  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const visibleProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
+
+  function updateUrl(nextPage: number, nextCategory = filter) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(nextPage));
+    if (nextCategory && nextCategory !== "All") {
+      params.set("category", nextCategory);
+    } else {
+      params.delete("category");
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function goToPage(nextPage: number) {
+    const bounded = Math.min(Math.max(1, nextPage), totalPages);
+    setCurrentPage(bounded);
+    updateUrl(bounded);
+    window.requestAnimationFrame(() => {
+      gridTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  const pageItems = useMemo(() => {
+    const pages = new Set<number>([1, totalPages, safePage - 1, safePage, safePage + 1]);
+    if (totalPages <= 5) {
+      for (let page = 1; page <= totalPages; page += 1) pages.add(page);
+    }
+    const sorted = Array.from(pages)
+      .filter((page) => page >= 1 && page <= totalPages)
+      .sort((a, b) => a - b);
+    const items: Array<number | "..."> = [];
+    sorted.forEach((page, index) => {
+      const previous = sorted[index - 1];
+      if (previous && page - previous > 1) items.push("...");
+      items.push(page);
+    });
+    return items;
+  }, [safePage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(pageFromUrl);
+  }, [pageFromUrl]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+      updateUrl(totalPages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, totalPages]);
 
   return (
-    <div className="mt-7">
+    <div className="mt-7" ref={gridTopRef}>
       <div className="grid gap-3 rounded-lg border border-line bg-paper p-3 lg:grid-cols-[1fr_auto]">
         <label className="flex min-h-11 items-center gap-3 rounded border border-line bg-white px-4">
           <Search size={18} className="text-muted" />
@@ -46,7 +104,8 @@ export function CatalogGrid({
             className="w-full bg-transparent text-sm outline-none"
             onChange={(event) => {
               setQuery(event.target.value);
-              setVisibleCount(pageSize);
+              setCurrentPage(1);
+              updateUrl(1);
             }}
             value={query}
           />
@@ -59,7 +118,8 @@ export function CatalogGrid({
               key={item}
               onClick={() => {
                 setFilter(item);
-                setVisibleCount(pageSize);
+                setCurrentPage(1);
+                updateUrl(1, item);
               }}
               type="button"
             >
@@ -78,14 +138,51 @@ export function CatalogGrid({
         ))}
       </div>
 
-      {visibleProducts.length < filteredProducts.length ? (
-        <div className="mt-10 text-center">
+      {filteredProducts.length > pageSize ? (
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
           <button
-            className="btn-secondary"
-            onClick={() => setVisibleCount((count) => count + pageSize)}
+            className="min-h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
+            disabled={safePage === 1}
+            onClick={() => goToPage(safePage - 1)}
             type="button"
           >
-            Load more
+            Previous
+          </button>
+          {pageItems.map((item, index) =>
+            item === "..." ? (
+              <span className="px-1 text-xs text-muted" key={`ellipsis-${index}`}>...</span>
+            ) : (
+              <button
+                aria-current={safePage === item ? "page" : undefined}
+                className="hidden min-h-10 min-w-10 rounded border border-line bg-white px-2 text-xs font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:block sm:text-sm"
+                key={item}
+                onClick={() => goToPage(item)}
+                type="button"
+              >
+                {item}
+              </button>
+            )
+          )}
+          {pageItems
+            .filter((item): item is number => typeof item === "number" && Math.abs(item - safePage) <= 1)
+            .map((item) => (
+              <button
+                aria-current={safePage === item ? "page" : undefined}
+                className="min-h-10 min-w-9 rounded border border-line bg-white px-2 text-xs font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:hidden"
+                key={`mobile-${item}`}
+                onClick={() => goToPage(item)}
+                type="button"
+              >
+                {item}
+              </button>
+            ))}
+          <button
+            className="min-h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
+            disabled={safePage === totalPages}
+            onClick={() => goToPage(safePage + 1)}
+            type="button"
+          >
+            Next
           </button>
         </div>
       ) : null}

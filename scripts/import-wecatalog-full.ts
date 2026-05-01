@@ -37,6 +37,12 @@ function hasArg(name: string) {
   return process.argv.slice(2).includes(name);
 }
 
+function getArgValue(name: string, fallback: string) {
+  const args = process.argv.slice(2);
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] || fallback : fallback;
+}
+
 function productStats(importFolder: string) {
   const reportPath = path.join(importFolder, "import-report.json");
   if (!existsSync(reportPath)) {
@@ -112,6 +118,8 @@ async function main() {
       inputJson,
       "--provider",
       "deepseek",
+      "--translate-concurrency",
+      getArgValue("--translate-concurrency", "3"),
     ]);
 
     translatedJsonPath = path.join(importFolder, "products-import.translated.json");

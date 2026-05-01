@@ -17,6 +17,7 @@ type CliOptions = {
   input: string;
   provider: "deepseek";
   model: string;
+  translateConcurrency: number;
 };
 
 const fallbackDescription =
@@ -111,6 +112,7 @@ function parseArgs(): CliOptions {
     input,
     provider: "deepseek",
     model: getValue("--model") || process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    translateConcurrency: Math.max(1, Math.min(Number(getValue("--translate-concurrency") || 3) || 3, 5)),
   };
 }
 
@@ -228,24 +230,70 @@ async function translateWithDeepSeek(titleSource: string, descriptionSource: str
     throw new Error("Missing DEEPSEEK_API_KEY");
   }
   const baseUrl = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: options.model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: messages(titleSource, descriptionSource, strict),
-    }),
-  });
+  const response = await withRetry(async () => {
+    const apiResponse = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: messages(titleSource, descriptionSource, strict),
+      }),
+    });
+    if (!apiResponse.ok) {
+      throw new Error(`DeepSeek HTTP ${apiResponse.status}`);
+    }
+    return apiResponse;
+  }, 2);
   if (!response.ok) {
     throw new Error(`DeepSeek HTTP ${response.status}`);
   }
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   return parseTranslationJson(data.choices?.[0]?.message?.content || "");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(task: () => Promise<T>, retries: number) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await wait(600 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+  onComplete?: (result: R, index: number) => void
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const result = await worker(items[index], index);
+      results[index] = result;
+      onComplete?.(result, index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function translateProduct(product: ProductRow, options: CliOptions): Promise<ProductRow> {
@@ -308,10 +356,21 @@ async function main() {
   const inputPath = path.resolve(options.input);
   const raw = await fs.readFile(inputPath, "utf8");
   const products = JSON.parse(raw) as ProductRow[];
-  const translated: ProductRow[] = [];
-  for (const product of products) {
-    translated.push(await translateProduct(product, options));
-  }
+  let completed = 0;
+  let failed = 0;
+  const translated = await mapWithConcurrency(
+    products,
+    options.translateConcurrency,
+    (product) => translateProduct(product, options),
+    (result) => {
+      completed += 1;
+      if (result.translation_status !== "success") failed += 1;
+      if (completed === products.length || completed % 10 === 0) {
+        console.log(`Translated ${completed}/${products.length}`);
+        console.log(`Translated failed: ${failed}`);
+      }
+    }
+  );
 
   const outputJson = inputPath.replace(/\.json$/i, ".translated.json");
   const outputCsv = inputPath.replace(/\.json$/i, ".translated.csv");

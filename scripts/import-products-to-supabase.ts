@@ -39,6 +39,7 @@ type Args = {
   category: string;
   dryRun: boolean;
   publish: boolean;
+  uploadConcurrency: number;
 };
 
 type Report = {
@@ -52,6 +53,7 @@ type Report = {
   updated_products: number;
   skipped_duplicates: number;
   total_images_uploaded: number;
+  failed_uploads: number;
   skipped_products: Array<{ product_code?: string; reason: string }>;
   failed_products: Array<{ product_code?: string; reason: string }>;
   product_codes_imported: string[];
@@ -84,6 +86,7 @@ function parseArgs(): Args {
     category: "Apparel",
     dryRun: false,
     publish: false,
+    uploadConcurrency: 3,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -98,6 +101,9 @@ function parseArgs(): Args {
       args.dryRun = true;
     } else if (value === "--publish") {
       args.publish = true;
+    } else if (value === "--upload-concurrency") {
+      args.uploadConcurrency = Math.max(1, Math.min(Number(argv[index + 1] || 3) || 3, 5));
+      index += 1;
     }
   }
 
@@ -265,16 +271,16 @@ async function uploadObject({
   storagePath: string;
   filePath: string;
 }) {
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
-    method: "POST",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": contentTypeFor(filePath),
-      "x-upsert": "true",
-    },
-    body: readFileSync(filePath),
-  });
+  const response = await withRetry(() => fetch(`${supabaseUrl}/storage/v1/object/${bucketName}/${storagePath}`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": contentTypeFor(filePath),
+        "x-upsert": "true",
+      },
+      body: readFileSync(filePath),
+    }), 2);
 
   if (!response.ok) {
     const text = await response.text();
@@ -282,6 +288,47 @@ async function uploadObject({
   }
 
   return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${storagePath}`;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(task: () => Promise<T>, retries: number) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const result = await task();
+      if (result instanceof Response && !result.ok) {
+        throw new Error(`HTTP ${result.status}`);
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await wait(700 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function upsertProduct({
@@ -444,6 +491,8 @@ async function main() {
   const prefix = categoryPrefix(category);
   let nextNumber = Math.max(0, ...existingProducts.map((product) => parseProductNumber(product.product_code, prefix))) + 1;
   const seenInputFingerprints = new Set<string>();
+  const totalImagesPlanned = rows.reduce((sum, row) => sum + localImagePaths(row, importDir).length + localThumbnailPaths(row, importDir).length, 0);
+  let uploadedProgress = 0;
 
   const report: Report = {
     dry_run: args.dryRun,
@@ -456,6 +505,7 @@ async function main() {
     updated_products: 0,
     skipped_duplicates: 0,
     total_images_uploaded: 0,
+    failed_uploads: 0,
     skipped_products: [],
     failed_products: [],
     product_codes_imported: [],
@@ -504,28 +554,38 @@ async function main() {
           thumbnailUrls.push(`${bucketName}/${storageFolder}/thumbs/${path.basename(filePath)}`);
         }
       } else {
-        for (const filePath of imagePaths) {
-          const storagePath = `${storageFolder}/display/${path.basename(filePath)}`;
-          const publicUrl = await uploadObject({
-            supabaseUrl,
-            serviceKey,
-            storagePath,
-            filePath,
-          });
-          publicUrls.push(publicUrl);
-          report.total_images_uploaded += 1;
-        }
-        for (const filePath of thumbnailPaths) {
-          const storagePath = `${storageFolder}/thumbs/${path.basename(filePath)}`;
-          const publicUrl = await uploadObject({
-            supabaseUrl,
-            serviceKey,
-            storagePath,
-            filePath,
-          });
-          thumbnailUrls.push(publicUrl);
-          report.total_images_uploaded += 1;
-        }
+        const uploadedDisplays = await mapWithConcurrency(
+          imagePaths,
+          args.uploadConcurrency,
+          async (filePath) => {
+            const storagePath = `${storageFolder}/display/${path.basename(filePath)}`;
+            const publicUrl = await uploadObject({ supabaseUrl, serviceKey, storagePath, filePath });
+            uploadedProgress += 1;
+            report.total_images_uploaded += 1;
+            if (uploadedProgress === totalImagesPlanned || uploadedProgress % 50 === 0) {
+              console.log(`Uploaded images ${uploadedProgress}/${totalImagesPlanned}`);
+              console.log(`Failed uploads: ${report.failed_uploads}`);
+            }
+            return publicUrl;
+          }
+        );
+        publicUrls.push(...uploadedDisplays);
+        const uploadedThumbnails = await mapWithConcurrency(
+          thumbnailPaths,
+          args.uploadConcurrency,
+          async (filePath) => {
+            const storagePath = `${storageFolder}/thumbs/${path.basename(filePath)}`;
+            const publicUrl = await uploadObject({ supabaseUrl, serviceKey, storagePath, filePath });
+            uploadedProgress += 1;
+            report.total_images_uploaded += 1;
+            if (uploadedProgress === totalImagesPlanned || uploadedProgress % 50 === 0) {
+              console.log(`Uploaded images ${uploadedProgress}/${totalImagesPlanned}`);
+              console.log(`Failed uploads: ${report.failed_uploads}`);
+            }
+            return publicUrl;
+          }
+        );
+        thumbnailUrls.push(...uploadedThumbnails);
       }
 
       const productPayload = {
@@ -588,7 +648,11 @@ async function main() {
       });
 
       console.log(`${args.dryRun ? "Would import" : action === "update" ? "Updated" : "Created"} ${assignedProductCode}: ${publicUrls.length} display images, ${thumbnailUrls.length} thumbnails`);
+      if (report.total_products_imported === rows.length || report.total_products_imported % 10 === 0) {
+        console.log(`Imported products ${report.total_products_imported}/${rows.length}`);
+      }
     } catch (error) {
+      report.failed_uploads += 1;
       report.failed_products.push({
         product_code: row.product_code,
         reason: error instanceof Error ? error.message : String(error),
