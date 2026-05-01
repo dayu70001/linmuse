@@ -1,6 +1,6 @@
-# Lin Muse
+# LM Dkbrand
 
-Lin Muse brand website built with Next.js and ready for Vercel deployment.
+Clean factory-direct retail and wholesale catalog website for LM Dkbrand, built with Next.js, TypeScript, and Tailwind CSS.
 
 ## Local development
 

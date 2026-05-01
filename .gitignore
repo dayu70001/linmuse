@@ -5,3 +5,13 @@ dist
 .env*.local
 .vercel
 *.log
+wecatalog-debug-log.txt
+imports/
+cloudflared
+cloudflared.tgz
+.DS_Store
+tsconfig.tsbuildinfo
+upload_via_github_api.py
+scripts/*.backup-*.ts
+scripts/*.working-*.ts
+scripts/import_yupoo_catalog.py

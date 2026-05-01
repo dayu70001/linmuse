@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Footer } from "@/components/Footer";
+import { Header } from "@/components/Header";
+import { MobileWhatsAppBar } from "@/components/MobileWhatsAppBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lin Muse | Apparel, Shoes & Watches Wholesale",
+  title: "LM Dkbrand | Factory Direct Retail & Wholesale",
   description:
-    "Lin Muse is an international retail and wholesale partner for apparel, shoes, and watches.",
+    "LM Dkbrand offers apparel, shoes, watches, and bags for retail and wholesale buyers, with factory-direct supply, orders from 1 piece, and fast delivery in 7-12 business days.",
 };
 
 export default function RootLayout({
@@ -15,7 +18,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Header />
+        {children}
+        <Footer />
+        <MobileWhatsAppBar />
+      </body>
     </html>
   );
 }

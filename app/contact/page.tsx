@@ -1,0 +1,94 @@
+import { Mail, MessageCircle, PackageCheck, Send } from "lucide-react";
+import Link from "next/link";
+import { SectionHeading } from "@/components/SectionHeading";
+import { siteConfig } from "@/config/site";
+import { getSetting, getSiteSettings } from "@/lib/siteData";
+import { whatsappUrl } from "@/lib/whatsapp";
+
+export default async function ContactPage() {
+  const settings = await getSiteSettings();
+  const whatsappRetail = getSetting(settings, "whatsapp_retail") || siteConfig.whatsappRetail;
+  const whatsappWholesale = getSetting(settings, "whatsapp_wholesale") || siteConfig.whatsappWholesale;
+  const whatsappAfterSales = getSetting(settings, "whatsapp_after_sales") || siteConfig.whatsappAfterSales;
+  const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
+  const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
+  const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
+  const email = getSetting(settings, "email") || siteConfig.email;
+  const cards = [
+    {
+      title: "Retail Order",
+      text: "Ask for single-piece availability, size options, delivery time, and product details.",
+      icon: MessageCircle,
+      href: whatsappUrl(whatsappRetail, "Hi, I want to ask about retail order options."),
+    },
+    {
+      title: "Wholesale Inquiry",
+      text: "Send product IDs, quantity, size range, and destination country for quotation support.",
+      icon: MessageCircle,
+      href: whatsappUrl(whatsappWholesale, "Hi, I want to ask about wholesale products."),
+    },
+    {
+      title: "Shipping & After-sales",
+      text: "Send order details and photos for shipping or after-sales support.",
+      icon: PackageCheck,
+      href: whatsappUrl(whatsappAfterSales, "Hi, I need shipping or after-sales support."),
+    },
+    {
+      title: "Daily Updates Channel",
+      text: "Follow daily new arrivals, packing videos, and buyer updates.",
+      icon: Send,
+      href: telegram || "/contact",
+    },
+  ];
+
+  return (
+    <main className="bg-white">
+      <section className="section-pad">
+        <div className="container-page">
+          <SectionHeading
+            eyebrow="Contact"
+            title="Choose the right contact channel"
+            text="Use the correct contact card so retail orders, wholesale inquiries, and shipping support can be handled clearly."
+          />
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            {cards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link className="card p-6 transition hover:border-gold/80" href={card.href} key={card.title}>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-paper">
+                    <Icon className="text-gold" size={24} />
+                  </div>
+                  <h2 className="mt-5 font-serif text-2xl text-ink">{card.title}</h2>
+                  <p className="mt-3 max-w-md text-sm leading-6 text-muted">{card.text}</p>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="card p-6">
+              <h2 className="font-serif text-2xl text-ink">Social channels</h2>
+              <div className="mt-5 grid gap-3 text-sm font-semibold text-muted sm:grid-cols-2">
+                <Link href={telegram || "/contact"}>Telegram Channel</Link>
+                <Link href={instagram || "/contact"}>Instagram</Link>
+                <Link href={facebook || "/contact"}>Facebook</Link>
+                <Link href={`mailto:${email}`}>
+                  <Mail className="mr-2 inline text-gold" size={16} />
+                  {email}
+                </Link>
+              </div>
+            </div>
+            <div className="card bg-paper p-6">
+              <h2 className="font-serif text-2xl text-ink">Inquiry details</h2>
+              <div className="mt-4 grid gap-3 text-sm leading-6 text-muted">
+                <p>For retail orders, send product ID, size, color, and destination.</p>
+                <p>For wholesale orders, send product IDs, quantity, size range, and destination country.</p>
+                <p className="font-semibold text-ink">Typical response time: within 24 hours.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
