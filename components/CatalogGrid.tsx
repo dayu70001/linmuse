@@ -7,7 +7,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { categories } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
 
-const pageSize = 25;
+const desktopPageSize = 25;
+const mobilePageSize = 21;
 const filters = ["All", ...categories];
 
 export function CatalogGrid({
@@ -28,6 +29,27 @@ export function CatalogGrid({
   const pageFromUrl = Math.max(1, Number(searchParams.get("page") || 1) || 1);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [jumpPage, setJumpPage] = useState(String(pageFromUrl));
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+
+    const updatePageSizeMode = () => {
+      setIsMobile(media.matches);
+    };
+
+    updatePageSizeMode();
+
+    if (media.addEventListener) {
+      media.addEventListener("change", updatePageSizeMode);
+      return () => media.removeEventListener("change", updatePageSizeMode);
+    }
+
+    media.addListener(updatePageSizeMode);
+    return () => media.removeListener(updatePageSizeMode);
+  }, []);
+
+  const pageSize = isMobile ? mobilePageSize : desktopPageSize;
 
   const filteredProducts = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -145,9 +167,9 @@ export function CatalogGrid({
       </div>
 
       {filteredProducts.length > pageSize ? (
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5 sm:mt-8 sm:gap-2">
           <button
-            className="min-h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
+            className="min-h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
             disabled={safePage === 1}
             onClick={() => goToPage(safePage - 1)}
             type="button"
@@ -174,7 +196,7 @@ export function CatalogGrid({
             .map((item) => (
               <button
                 aria-current={safePage === item ? "page" : undefined}
-                className="min-h-10 min-w-9 rounded border border-line bg-white px-2 text-xs font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:hidden"
+                className="min-h-9 min-w-8 rounded border border-line bg-white px-2 text-xs font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:hidden"
                 key={`mobile-${item}`}
                 onClick={() => goToPage(item)}
                 type="button"
@@ -183,7 +205,7 @@ export function CatalogGrid({
               </button>
             ))}
           <button
-            className="min-h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
+            className="min-h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
             disabled={safePage === totalPages}
             onClick={() => goToPage(safePage + 1)}
             type="button"
@@ -192,19 +214,19 @@ export function CatalogGrid({
           </button>
 
           <form
-            className="mt-2 flex w-full items-center justify-center gap-2 sm:mt-0 sm:w-auto"
+            className="mt-1 flex w-auto items-center justify-center gap-1.5 sm:mt-0 sm:gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               goToPage(Number(jumpPage) || 1);
             }}
           >
-            <label className="text-xs font-bold text-muted sm:text-sm" htmlFor="catalog-page-jump">
+            <label className="whitespace-nowrap text-xs font-bold text-muted sm:text-sm" htmlFor="catalog-page-jump">
               Go to page
             </label>
             <input
               id="catalog-page-jump"
               aria-label="Go to page"
-              className="h-10 w-16 rounded border border-line bg-white px-2 text-center text-xs font-bold text-ink outline-none sm:text-sm"
+              className="h-9 w-12 rounded border border-line bg-white px-2 text-center text-xs font-bold text-ink outline-none sm:h-10 sm:w-16 sm:text-sm"
               inputMode="numeric"
               min={1}
               max={totalPages}
@@ -213,7 +235,7 @@ export function CatalogGrid({
               value={jumpPage}
             />
             <button
-              className="h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink sm:text-sm"
+              className="h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink sm:h-10 sm:px-3 sm:text-sm"
               type="submit"
             >
               Go
