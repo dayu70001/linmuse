@@ -7,7 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { categories } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
 
-const pageSize = 25;
+const pageSize = 24;
 const filters = ["All", ...categories];
 
 export function CatalogGrid({
@@ -27,7 +27,6 @@ export function CatalogGrid({
   const [query, setQuery] = useState("");
   const pageFromUrl = Math.max(1, Number(searchParams.get("page") || 1) || 1);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
-  const [jumpPage, setJumpPage] = useState(String(pageFromUrl));
 
   const filteredProducts = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -60,7 +59,6 @@ export function CatalogGrid({
   function goToPage(nextPage: number) {
     const bounded = Math.min(Math.max(1, nextPage), totalPages);
     setCurrentPage(bounded);
-    setJumpPage(String(bounded));
     updateUrl(bounded);
     window.requestAnimationFrame(() => {
       gridTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -86,13 +84,11 @@ export function CatalogGrid({
 
   useEffect(() => {
     setCurrentPage(pageFromUrl);
-    setJumpPage(String(pageFromUrl));
   }, [pageFromUrl]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
-      setJumpPage(String(totalPages));
       updateUrl(totalPages);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,7 +105,6 @@ export function CatalogGrid({
             onChange={(event) => {
               setQuery(event.target.value);
               setCurrentPage(1);
-              setJumpPage("1");
               updateUrl(1);
             }}
             value={query}
@@ -124,7 +119,6 @@ export function CatalogGrid({
               onClick={() => {
                 setFilter(item);
                 setCurrentPage(1);
-                setJumpPage("1");
                 updateUrl(1, item);
               }}
               type="button"
@@ -190,35 +184,6 @@ export function CatalogGrid({
           >
             Next
           </button>
-
-          <form
-            className="mt-2 flex w-full items-center justify-center gap-2 sm:mt-0 sm:w-auto"
-            onSubmit={(event) => {
-              event.preventDefault();
-              goToPage(Number(jumpPage) || 1);
-            }}
-          >
-            <label className="text-xs font-bold text-muted sm:text-sm" htmlFor="catalog-page-jump">
-              Go to page
-            </label>
-            <input
-              id="catalog-page-jump"
-              aria-label="Go to page"
-              className="h-10 w-16 rounded border border-line bg-white px-2 text-center text-xs font-bold text-ink outline-none sm:text-sm"
-              inputMode="numeric"
-              min={1}
-              max={totalPages}
-              onChange={(event) => setJumpPage(event.target.value)}
-              type="number"
-              value={jumpPage}
-            />
-            <button
-              className="h-10 rounded border border-line bg-white px-3 text-xs font-bold text-ink sm:text-sm"
-              type="submit"
-            >
-              Go
-            </button>
-          </form>
         </div>
       ) : null}
     </div>
