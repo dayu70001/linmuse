@@ -167,9 +167,9 @@ export function CatalogGrid({
       </div>
 
       {filteredProducts.length > pageSize ? (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5 sm:mt-8 sm:gap-2">
+        <div className="mt-5 flex max-w-full flex-wrap items-center justify-center gap-1 px-2 sm:mt-8 sm:gap-2 sm:px-0">
           <button
-            className="min-h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
+            className="min-h-8 rounded border border-line bg-white px-2 text-[11px] font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
             disabled={safePage === 1}
             onClick={() => goToPage(safePage - 1)}
             type="button"
@@ -196,7 +196,7 @@ export function CatalogGrid({
             .map((item) => (
               <button
                 aria-current={safePage === item ? "page" : undefined}
-                className="min-h-9 min-w-8 rounded border border-line bg-white px-2 text-xs font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:hidden"
+                className="min-h-8 min-w-8 rounded border border-line bg-white px-1.5 text-[11px] font-bold text-muted aria-current:border-ink aria-current:bg-ink aria-current:text-white sm:hidden"
                 key={`mobile-${item}`}
                 onClick={() => goToPage(item)}
                 type="button"
@@ -205,7 +205,7 @@ export function CatalogGrid({
               </button>
             ))}
           <button
-            className="min-h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
+            className="min-h-8 rounded border border-line bg-white px-2 text-[11px] font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4 sm:text-sm"
             disabled={safePage === totalPages}
             onClick={() => goToPage(safePage + 1)}
             type="button"
@@ -214,19 +214,19 @@ export function CatalogGrid({
           </button>
 
           <form
-            className="mt-1 flex w-auto items-center justify-center gap-1.5 sm:mt-0 sm:gap-2"
+            className="contents sm:flex sm:w-auto sm:items-center sm:justify-center sm:gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               goToPage(Number(jumpPage) || 1);
             }}
           >
-            <label className="whitespace-nowrap text-xs font-bold text-muted sm:text-sm" htmlFor="catalog-page-jump">
+            <label className="hidden whitespace-nowrap text-xs font-bold text-muted sm:block sm:text-sm" htmlFor="catalog-page-jump">
               Go to page
             </label>
             <input
               id="catalog-page-jump"
               aria-label="Go to page"
-              className="h-9 w-12 rounded border border-line bg-white px-2 text-center text-xs font-bold text-ink outline-none sm:h-10 sm:w-16 sm:text-sm"
+              className="h-8 w-11 rounded border border-line bg-white px-1.5 text-center text-[11px] font-bold text-ink outline-none sm:h-10 sm:w-16 sm:px-2 sm:text-sm"
               inputMode="numeric"
               min={1}
               max={totalPages}
@@ -235,7 +235,7 @@ export function CatalogGrid({
               value={jumpPage}
             />
             <button
-              className="h-9 rounded border border-line bg-white px-2.5 text-xs font-bold text-ink sm:h-10 sm:px-3 sm:text-sm"
+              className="h-8 rounded border border-line bg-white px-2 text-[11px] font-bold text-ink sm:h-10 sm:px-3 sm:text-sm"
               type="submit"
             >
               Go
