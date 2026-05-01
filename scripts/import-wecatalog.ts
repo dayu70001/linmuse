@@ -35,6 +35,11 @@ type CliOptions = {
   url: string;
   category: string;
   max: number;
+  limitNew: number | null;
+  maxScan: number;
+  skipExisting: boolean;
+  importBatchId: string;
+  importedAt: string;
   debug: boolean;
   headed: boolean;
 };
@@ -95,6 +100,10 @@ type ProductExport = {
   gallery_thumbnails: string;
   source_url: string;
   source_product_url: string;
+  source_album_url: string;
+  source_fingerprint: string;
+  import_batch_id: string;
+  imported_at: string;
   translation_provider: "none" | "deepseek";
   translation_status: "fallback" | "success" | "failed" | "validation_failed";
   image_count: number;
@@ -220,6 +229,10 @@ const csvColumns: Array<keyof ProductExport> = [
   "gallery_thumbnails",
   "source_url",
   "source_product_url",
+  "source_album_url",
+  "source_fingerprint",
+  "import_batch_id",
+  "imported_at",
   "translation_provider",
   "translation_status",
   "image_count",
@@ -238,6 +251,11 @@ function parseArgs(): CliOptions {
     throw new Error('Missing required --url "https://..."');
   }
   const requestedMax = Number(getValue("--max") || 10);
+  const requestedLimitNew = getValue("--limit-new");
+  const limitNew = requestedLimitNew ? Math.max(1, Number(requestedLimitNew) || 10) : null;
+  const targetMax = limitNew || Math.max(1, Math.min(Number.isFinite(requestedMax) ? requestedMax : 10, 20));
+  const requestedMaxScan = Number(getValue("--max-scan") || Math.max(targetMax * 5, targetMax * 2));
+  const importedAt = new Date().toISOString();
   const translator = getValue("--translator") || "none";
   if (!["none", "deepseek"].includes(translator)) {
     throw new Error('--translator must be "none" or "deepseek"');
@@ -245,7 +263,12 @@ function parseArgs(): CliOptions {
   return {
     url,
     category: getValue("--category") || "Apparel",
-    max: Math.max(1, Math.min(Number.isFinite(requestedMax) ? requestedMax : 10, 20)),
+    max: targetMax,
+    limitNew,
+    maxScan: Math.max(targetMax, Number.isFinite(requestedMaxScan) ? requestedMaxScan : targetMax * 5),
+    skipExisting: args.includes("--skip-existing"),
+    importBatchId: `${(getValue("--category") || "Apparel").toLowerCase()}-${batchTimestamp(importedAt)}`,
+    importedAt,
     debug: args.includes("--debug"),
     headed: args.includes("--headed"),
   };
@@ -259,6 +282,39 @@ function timestamp() {
     pad(now.getMonth() + 1),
     pad(now.getDate()),
   ].join("-") + `-${pad(now.getHours())}-${pad(now.getMinutes())}`;
+}
+
+function batchTimestamp(value = new Date().toISOString()) {
+  const date = new Date(value);
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function importsRoot() {
+  return path.join(process.cwd(), "imports", "wecatalog");
+}
+
+function importHistoryPath() {
+  return path.join(importsRoot(), "import-history.json");
+}
+
+function loadEnvLocal() {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  return fs.readFile(envPath, "utf8")
+    .then((content) => {
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+        const index = trimmed.indexOf("=");
+        const key = trimmed.slice(0, index).trim();
+        const rawValue = trimmed.slice(index + 1).trim();
+        const value = rawValue.replace(/^['"]|['"]$/g, "");
+        if (key && process.env[key] === undefined) {
+          process.env[key] = value;
+        }
+      }
+    })
+    .catch(() => undefined);
 }
 
 function normalizeUrl(raw: string, baseUrl: string) {
@@ -436,8 +492,95 @@ function productDedupKey(title: string, imageUrls: string[]) {
   return `${normalizeProductTitleForDedup(title)}|${firstImage}`;
 }
 
+function sha1(value: string) {
+  return crypto.createHash("sha1").update(value).digest("hex");
+}
+
+function sourceFingerprint({
+  sourceAlbumUrl,
+  title,
+  selectedGroup,
+  firstImageUrl,
+}: {
+  sourceAlbumUrl: string;
+  title: string;
+  selectedGroup: string;
+  firstImageUrl: string;
+}) {
+  return sha1([
+    normalizeUrl(sourceAlbumUrl, sourceAlbumUrl) || sourceAlbumUrl,
+    normalizeProductTitleForDedup(title),
+    selectedGroup,
+    normalizedImageKey(firstImageUrl),
+  ].join("|"));
+}
+
+function fingerprintForProduct(product: DetailExtraction, sourceAlbumUrl: string) {
+  const imageSelection = selectDominantProductImages(product.imageUrls);
+  return {
+    fingerprint: sourceFingerprint({
+      sourceAlbumUrl,
+      title: product.title,
+      selectedGroup: imageSelection.selectedGroup,
+      firstImageUrl: imageSelection.selectedUrls[0] || product.imageUrls[0] || "",
+    }),
+    selectedGroup: imageSelection.selectedGroup,
+    firstImageUrl: imageSelection.selectedUrls[0] || "",
+  };
+}
+
 function productTitleDedupKey(title: string) {
   return normalizeProductTitleForDedup(title);
+}
+
+async function loadLocalHistory() {
+  const historyPath = importHistoryPath();
+  try {
+    const raw = await fs.readFile(historyPath, "utf8");
+    const parsed = JSON.parse(raw) as { fingerprints?: string[]; entries?: Array<{ source_fingerprint?: string }> };
+    return new Set([
+      ...(parsed.fingerprints || []),
+      ...(parsed.entries || []).map((entry) => entry.source_fingerprint || "").filter(Boolean),
+    ]);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+async function saveLocalHistory(rows: ProductExport[]) {
+  const historyPath = importHistoryPath();
+  await fs.mkdir(path.dirname(historyPath), { recursive: true });
+  const existing = await loadLocalHistory();
+  for (const row of rows) {
+    if (row.source_fingerprint) existing.add(row.source_fingerprint);
+  }
+  const payload = {
+    updated_at: new Date().toISOString(),
+    fingerprints: Array.from(existing).sort(),
+  };
+  await fs.writeFile(historyPath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+async function fetchSupabaseFingerprints() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (!supabaseUrl || !key) {
+    return new Set<string>();
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/products?select=source_fingerprint&source_fingerprint=not.is.null&limit=10000`, {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+    });
+    if (!response.ok) return new Set<string>();
+    const rows = await response.json() as Array<{ source_fingerprint?: string | null }>;
+    return new Set(rows.map((row) => row.source_fingerprint || "").filter(Boolean));
+  } catch {
+    return new Set<string>();
+  }
 }
 
 function containsChinese(text: string) {
@@ -1328,6 +1471,7 @@ async function exportDetailProduct({
   options,
   storeTitle,
   sourceUrl,
+  sourceFingerprintValue,
   clickResult,
 }: {
   product: DetailExtraction;
@@ -1337,6 +1481,7 @@ async function exportDetailProduct({
   options: CliOptions;
   storeTitle: string;
   sourceUrl: string;
+  sourceFingerprintValue: string;
   clickResult?: ClickResult;
 }) {
   const sourceTitle = cleanText(product.title);
@@ -1524,6 +1669,10 @@ async function exportDetailProduct({
       gallery_thumbnails: savedThumbnails.join("|"),
       source_url: sourceUrl,
       source_product_url: product.url,
+      source_album_url: sourceUrl,
+      source_fingerprint: sourceFingerprintValue,
+      import_batch_id: options.importBatchId,
+      imported_at: options.importedAt,
       translation_provider: translation.provider,
       translation_status: translation.status,
       image_count: savedImages.length,
@@ -1538,6 +1687,7 @@ async function exportDetailProduct({
 
 async function main() {
   const options = parseArgs();
+  await loadEnvLocal();
   const outputRoot = path.join(process.cwd(), "imports", "wecatalog", `clothing-test-${timestamp()}`);
   const imagesRoot = path.join(outputRoot, "images");
   const debugRoot = path.join(outputRoot, "debug");
@@ -1552,6 +1702,10 @@ async function main() {
   const riskyTermsFound: string[] = [];
   let totalImagesDownloaded = 0;
   let totalProductsFound = 0;
+  let skippedExisting = 0;
+  const existingFingerprints = options.skipExisting
+    ? new Set([...(await loadLocalHistory()), ...(await fetchSupabaseFingerprints())])
+    : new Set<string>();
 
   try {
     const loadModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
@@ -1577,7 +1731,7 @@ async function main() {
     attachNetworkCapture(page, networkRecords);
     await page.goto(options.url, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(2500);
-    await autoScroll(page, options.max);
+    await autoScroll(page, options.maxScan);
     await page.waitForTimeout(1000);
     const storeTitle = await getStoreTitle(page);
     if (options.debug) {
@@ -1630,7 +1784,7 @@ async function main() {
         sample_image_urls: networkDiscovery.candidates[0]?.image_urls.slice(0, 3) || [],
       }, null, 2));
     }
-    const candidates = await collectCandidates(page, options.url, options.max * 2);
+    const candidates = await collectCandidates(page, options.url, options.maxScan);
     totalProductsFound = candidates.length;
 
     const seenHashes = new Set<string>();
@@ -1639,6 +1793,11 @@ async function main() {
     for (const apiCandidate of networkDiscovery.candidates) {
       if (exported.length >= options.max) break;
       const detail = detailFromApiCandidate(apiCandidate, options.url);
+      const fingerprintInfo = fingerprintForProduct(detail, options.url);
+      if (options.skipExisting && existingFingerprints.has(fingerprintInfo.fingerprint)) {
+        skippedExisting += 1;
+        continue;
+      }
       const titleKey = productTitleDedupKey(detail.title);
       if (seenTitles.has(titleKey)) continue;
       const identity = crypto
@@ -1655,6 +1814,7 @@ async function main() {
         options,
         storeTitle,
         sourceUrl: options.url,
+        sourceFingerprintValue: fingerprintInfo.fingerprint,
       });
       if (!saved.row) {
         failedProducts.push({
@@ -1666,6 +1826,7 @@ async function main() {
       }
       seenHashes.add(identity);
       seenTitles.add(titleKey);
+      existingFingerprints.add(fingerprintInfo.fingerprint);
       exported.push(saved.row);
       totalImagesDownloaded += saved.downloaded;
       riskyTermsFound.push(...saved.riskyTerms);
@@ -1708,6 +1869,13 @@ async function main() {
           .createHash("sha1")
         .update(productDedupKey(product.title, product.imageUrls))
         .digest("hex");
+        const fingerprintInfo = fingerprintForProduct(product, options.url);
+        if (options.skipExisting && existingFingerprints.has(fingerprintInfo.fingerprint)) {
+          skippedExisting += 1;
+          await closeDetailAndReturn(page, options.url, clickResult.urlBefore);
+          attemptSequence += 1;
+          continue;
+        }
         const titleKey = productTitleDedupKey(product.title);
         if (seenTitles.has(titleKey)) continue;
         if (seenHashes.has(identity)) continue;
@@ -1721,6 +1889,7 @@ async function main() {
           options,
           storeTitle,
           sourceUrl: options.url,
+          sourceFingerprintValue: fingerprintInfo.fingerprint,
           clickResult,
         });
         if (!saved.row) {
@@ -1735,6 +1904,7 @@ async function main() {
         }
         seenHashes.add(identity);
         seenTitles.add(titleKey);
+        existingFingerprints.add(fingerprintInfo.fingerprint);
         exported.push(saved.row);
         totalImagesDownloaded += saved.downloaded;
         riskyTermsFound.push(...saved.riskyTerms);
@@ -1759,7 +1929,7 @@ async function main() {
           }, null, 2));
         }
         await closeDetailAndReturn(page, options.url, clickResult.urlBefore);
-        await autoScroll(page, Math.max(options.max, attemptSequence + 2));
+        await autoScroll(page, Math.max(options.maxScan, attemptSequence + 2));
         attemptSequence += 1;
       } catch (error) {
         failedProducts.push({
@@ -1792,10 +1962,16 @@ async function main() {
 
   const report = {
     source_url: options.url,
+    import_batch_id: options.importBatchId,
+    imported_at: options.importedAt,
+    skip_existing: options.skipExisting,
+    limit_new: options.limitNew,
+    max_scan: options.maxScan,
     output_folder: outputRoot,
     total_products_found: totalProductsFound,
     total_products_exported: exported.length,
     total_images_downloaded: totalImagesDownloaded,
+    skipped_existing_products: skippedExisting,
     failed_products: failedProducts,
     products_with_missing_images: productsWithMissingImages,
     products_with_fewer_than_3_images: productsWithFewerThan3Images,
@@ -1809,6 +1985,9 @@ async function main() {
   await fs.writeFile(path.join(outputRoot, "products-import.json"), JSON.stringify(exported, null, 2));
   await fs.writeFile(path.join(outputRoot, "products-import.csv"), `${toCsv(exported)}\n`);
   await fs.writeFile(path.join(outputRoot, "import-report.json"), JSON.stringify(report, null, 2));
+  if (exported.length > 0) {
+    await saveLocalHistory(exported);
+  }
 
   console.log(JSON.stringify(report, null, 2));
 }

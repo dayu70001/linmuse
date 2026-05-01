@@ -24,6 +24,9 @@ export type AdminProductRow = {
   status: string | null;
   is_active: boolean | null;
   is_featured: boolean | null;
+  import_batch_id: string | null;
+  imported_at: string | null;
+  source_fingerprint: string | null;
   created_at: string | null;
 };
 
@@ -104,7 +107,7 @@ export async function fetchAdminSettings() {
 
 export async function fetchAdminProducts() {
   return restFetch<AdminProductRow[]>(
-    "products?select=product_code,slug,category,title_en,main_image_url,main_thumbnail_url,status,is_active,is_featured,created_at&order=created_at.desc"
+    "products?select=product_code,slug,category,title_en,main_image_url,main_thumbnail_url,status,is_active,is_featured,import_batch_id,imported_at,source_fingerprint,created_at&order=created_at.desc"
   );
 }
 
@@ -136,6 +139,44 @@ export async function updateAdminProduct(
 ) {
   return restFetch<AdminProductRow[]>(
     `products?product_code=eq.${encodeURIComponent(productCode)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function updateAdminProductsByCodes(
+  productCodes: string[],
+  updates: Pick<AdminProductRow, "is_active" | "is_featured"> | Partial<AdminProductRow>
+) {
+  if (productCodes.length === 0) {
+    return [];
+  }
+  const values = productCodes.map((code) => `"${code.replaceAll('"', '\\"')}"`).join(",");
+  return restFetch<AdminProductRow[]>(
+    `products?product_code=in.(${values})`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function updateAdminProductsByBatch(
+  importBatchId: string,
+  updates: Pick<AdminProductRow, "is_active" | "is_featured"> | Partial<AdminProductRow>
+) {
+  return restFetch<AdminProductRow[]>(
+    `products?import_batch_id=eq.${encodeURIComponent(importBatchId)}`,
     {
       method: "PATCH",
       headers: {

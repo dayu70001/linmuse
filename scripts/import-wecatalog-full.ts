@@ -71,6 +71,7 @@ async function main() {
   const userArgs = process.argv.slice(2);
   if (userArgs.includes("--help") || userArgs.includes("-h")) {
     console.log('Usage: npm run import:wecatalog:full -- --url "https://..." --category Apparel --max 3 --debug --headed');
+    console.log('Batch usage: DEEPSEEK_API_KEY="KEY" npm run import:wecatalog:full -- --url "https://..." --category Apparel --limit-new 100 --skip-existing --max-scan 500');
     console.log("Runs local WeCatalog import, then runs DeepSeek translation when DEEPSEEK_API_KEY is set.");
     return;
   }

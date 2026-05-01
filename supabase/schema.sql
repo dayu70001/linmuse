@@ -45,6 +45,10 @@ create table if not exists public.products (
   image_count integer default 0,
   source_url text,
   source_product_url text,
+  source_album_url text,
+  source_fingerprint text,
+  import_batch_id text,
+  imported_at timestamp with time zone default now(),
   status text default 'draft',
   is_active boolean default false,
   is_featured boolean default false,
@@ -58,6 +62,25 @@ add column if not exists main_thumbnail_url text;
 
 alter table public.products
 add column if not exists gallery_thumbnail_urls jsonb default '[]'::jsonb;
+
+alter table public.products
+add column if not exists source_album_url text;
+
+alter table public.products
+add column if not exists source_fingerprint text;
+
+alter table public.products
+add column if not exists import_batch_id text;
+
+alter table public.products
+add column if not exists imported_at timestamp with time zone default now();
+
+create unique index if not exists products_source_fingerprint_unique
+on public.products (source_fingerprint)
+where source_fingerprint is not null;
+
+create index if not exists products_import_batch_id_idx
+on public.products (import_batch_id);
 
 create or replace function public.set_updated_at()
 returns trigger as $$

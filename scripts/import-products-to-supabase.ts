@@ -26,6 +26,10 @@ type ImportRow = {
   image_count?: number;
   source_url?: string;
   source_product_url?: string;
+  source_album_url?: string;
+  source_fingerprint?: string;
+  import_batch_id?: string;
+  imported_at?: string;
   status?: string;
   notes?: string;
 };
@@ -39,14 +43,23 @@ type Args = {
 
 type Report = {
   dry_run: boolean;
+  import_batch_id: string;
+  imported_at: string;
+  category: string;
   total_products_read: number;
   total_products_imported: number;
+  created_products: number;
+  updated_products: number;
+  skipped_duplicates: number;
   total_images_uploaded: number;
   skipped_products: Array<{ product_code?: string; reason: string }>;
   failed_products: Array<{ product_code?: string; reason: string }>;
   product_codes_imported: string[];
+  product_codes_created: string[];
+  product_codes_updated: string[];
   products: Array<{
     product_code: string;
+    action: "create" | "update" | "dry_run";
     image_count: number;
     main_image_url?: string;
     main_thumbnail_url?: string;
@@ -58,6 +71,11 @@ type Report = {
 const bucketName = "product-images";
 const defaultSizes = "Contact us for current size availability";
 const defaultColors = "Contact us for available color options";
+
+type ExistingProduct = {
+  product_code: string;
+  source_fingerprint: string | null;
+};
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
@@ -96,6 +114,35 @@ function cleanSlug(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function batchTimestamp(value = new Date().toISOString()) {
+  const date = new Date(value);
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function batchIdFor(category: string, rows: ImportRow[]) {
+  const rowBatch = rows.find((row) => row.import_batch_id)?.import_batch_id;
+  if (rowBatch) return rowBatch;
+  return `${category.toLowerCase()}-${batchTimestamp()}`;
+}
+
+function categoryPrefix(category: string) {
+  const normalized = category.toLowerCase();
+  if (normalized === "shoes") return "LM-SHO";
+  if (normalized === "watches") return "LM-WAT";
+  if (normalized === "bags") return "LM-BAG";
+  return "LM-APP";
+}
+
+function parseProductNumber(productCode: string, prefix: string) {
+  const match = productCode.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`, "i"));
+  return match ? Number(match[1]) : 0;
+}
+
+function nextProductCode(prefix: string, nextNumber: number) {
+  return `${prefix}-${String(nextNumber).padStart(4, "0")}`;
 }
 
 function parseGallery(row: ImportRow) {
@@ -265,6 +312,92 @@ async function upsertProduct({
   return response.json();
 }
 
+async function fetchExistingProducts({
+  supabaseUrl,
+  serviceKey,
+  category,
+}: {
+  supabaseUrl: string;
+  serviceKey: string;
+  category: string;
+}) {
+  if (!supabaseUrl || !serviceKey) return [] as ExistingProduct[];
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/products?select=product_code,source_fingerprint&category=eq.${encodeURIComponent(category)}&limit=10000`,
+    {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Could not read existing products from Supabase.");
+  }
+
+  return response.json() as Promise<ExistingProduct[]>;
+}
+
+async function createProduct({
+  supabaseUrl,
+  serviceKey,
+  product,
+}: {
+  supabaseUrl: string;
+  serviceKey: string;
+  product: Record<string, unknown>;
+}) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/products`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(product),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Product create failed for ${product.product_code}`);
+  }
+
+  return response.json();
+}
+
+async function updateProductByCode({
+  supabaseUrl,
+  serviceKey,
+  productCode,
+  product,
+}: {
+  supabaseUrl: string;
+  serviceKey: string;
+  productCode: string;
+  product: Record<string, unknown>;
+}) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/products?product_code=eq.${encodeURIComponent(productCode)}`, {
+    method: "PATCH",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(product),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Product update failed for ${productCode}`);
+  }
+
+  return response.json();
+}
+
 async function main() {
   loadEnvLocal();
 
@@ -283,41 +416,83 @@ async function main() {
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const category = args.category || rows[0]?.category || "Apparel";
+  const importBatchId = batchIdFor(category, rows);
+  const importedAt = rows.find((row) => row.imported_at)?.imported_at || new Date().toISOString();
 
   if (!args.dryRun && (!supabaseUrl || !serviceKey)) {
     throw new Error("SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for real import.");
   }
 
+  let existingProducts: ExistingProduct[] = [];
+  if (supabaseUrl && serviceKey) {
+    try {
+      existingProducts = await fetchExistingProducts({ supabaseUrl, serviceKey, category });
+    } catch (error) {
+      if (!args.dryRun) {
+        throw error;
+      }
+      console.warn(`Could not read existing Supabase products during dry-run: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const existingByFingerprint = new Map(
+    existingProducts
+      .filter((product) => product.source_fingerprint)
+      .map((product) => [product.source_fingerprint as string, product])
+  );
+  const existingByCode = new Map(existingProducts.map((product) => [product.product_code, product]));
+  const prefix = categoryPrefix(category);
+  let nextNumber = Math.max(0, ...existingProducts.map((product) => parseProductNumber(product.product_code, prefix))) + 1;
+  const seenInputFingerprints = new Set<string>();
+
   const report: Report = {
     dry_run: args.dryRun,
+    import_batch_id: importBatchId,
+    imported_at: importedAt,
+    category,
     total_products_read: rows.length,
     total_products_imported: 0,
+    created_products: 0,
+    updated_products: 0,
+    skipped_duplicates: 0,
     total_images_uploaded: 0,
     skipped_products: [],
     failed_products: [],
     product_codes_imported: [],
+    product_codes_created: [],
+    product_codes_updated: [],
     products: [],
   };
 
   for (const row of rows) {
     try {
-      if (!row.product_code) {
-        report.skipped_products.push({ reason: "Missing product_code" });
+      const rowFingerprint = row.source_fingerprint || "";
+      if (rowFingerprint && seenInputFingerprints.has(rowFingerprint)) {
+        report.skipped_duplicates += 1;
+        report.skipped_products.push({ product_code: row.product_code, reason: "Duplicate source_fingerprint inside input file" });
         continue;
       }
+      if (rowFingerprint) seenInputFingerprints.add(rowFingerprint);
+
+      const existingBySource = rowFingerprint ? existingByFingerprint.get(rowFingerprint) : undefined;
+      const existingByProductCode = row.product_code ? existingByCode.get(row.product_code) : undefined;
+      const existingProduct = existingBySource || (!rowFingerprint ? existingByProductCode : undefined);
+      const action: "create" | "update" = existingProduct ? "update" : "create";
+      const assignedProductCode = existingProduct?.product_code || nextProductCode(prefix, nextNumber++);
+      const assignedSlug = cleanSlug(assignedProductCode);
 
       const imagePaths = localImagePaths(row, importDir);
       const thumbnailPaths = localThumbnailPaths(row, importDir);
       if (imagePaths.length === 0) {
         report.skipped_products.push({
-          product_code: row.product_code,
+          product_code: assignedProductCode,
           reason: "No local product images found",
         });
         continue;
       }
 
-      const category = args.category || row.category || "Apparel";
-      const storageFolder = `${category.toLowerCase()}/${row.product_code}`;
+      const rowCategory = args.category || row.category || "Apparel";
+      const storageFolder = `${rowCategory.toLowerCase()}/${assignedProductCode}`;
       const publicUrls: string[] = [];
       const thumbnailUrls: string[] = [];
 
@@ -354,11 +529,11 @@ async function main() {
       }
 
       const productPayload = {
-        product_code: row.product_code,
-        slug: row.slug || cleanSlug(row.product_code),
-        category,
+        product_code: assignedProductCode,
+        slug: assignedSlug,
+        category: rowCategory,
         subcategory: row.subcategory || "Selected Apparel",
-        title_en: row.title_en || row.product_code,
+        title_en: row.title_en || assignedProductCode,
         description_en: row.description_en || "",
         source_title_cn: row.source_title_cn || "",
         source_description_cn: row.source_description_cn || "",
@@ -375,20 +550,36 @@ async function main() {
         image_count: publicUrls.length,
         source_url: row.source_url || "",
         source_product_url: row.source_product_url || "",
-        status: "draft",
+        source_album_url: row.source_album_url || row.source_url || "",
+        source_fingerprint: rowFingerprint || null,
+        import_batch_id: row.import_batch_id || importBatchId,
+        imported_at: row.imported_at || importedAt,
+        status: args.publish ? "published" : "draft",
         is_active: args.publish,
         is_featured: false,
         notes: row.notes || "",
       };
 
       if (!args.dryRun) {
-        await upsertProduct({ supabaseUrl, serviceKey, product: productPayload });
+        if (action === "update") {
+          await updateProductByCode({ supabaseUrl, serviceKey, productCode: assignedProductCode, product: productPayload });
+        } else {
+          await createProduct({ supabaseUrl, serviceKey, product: productPayload });
+        }
       }
 
       report.total_products_imported += 1;
-      report.product_codes_imported.push(row.product_code);
+      if (action === "update") {
+        report.updated_products += 1;
+        report.product_codes_updated.push(assignedProductCode);
+      } else {
+        report.created_products += 1;
+        report.product_codes_created.push(assignedProductCode);
+      }
+      report.product_codes_imported.push(assignedProductCode);
       report.products.push({
-        product_code: row.product_code,
+        product_code: assignedProductCode,
+        action: args.dryRun ? "dry_run" : action,
         image_count: publicUrls.length,
         main_image_url: publicUrls[0],
         main_thumbnail_url: thumbnailUrls[0] || publicUrls[0],
@@ -396,7 +587,7 @@ async function main() {
         thumbnail_urls: thumbnailUrls,
       });
 
-      console.log(`${args.dryRun ? "Would import" : "Imported"} ${row.product_code}: ${publicUrls.length} display images, ${thumbnailUrls.length} thumbnails`);
+      console.log(`${args.dryRun ? "Would import" : action === "update" ? "Updated" : "Created"} ${assignedProductCode}: ${publicUrls.length} display images, ${thumbnailUrls.length} thumbnails`);
     } catch (error) {
       report.failed_products.push({
         product_code: row.product_code,
