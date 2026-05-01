@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 export default function MobileMenu({ telegramHref = "/contact" }: { telegramHref?: string }) {
+  const [open, setOpen] = useState(false);
+  const closeMenu = () => setOpen(false);
   const links = [
     { label: "Home", href: "/" },
     { label: "Catalog", href: "/catalog" },
@@ -12,34 +17,45 @@ export default function MobileMenu({ telegramHref = "/contact" }: { telegramHref
   ];
 
   return (
-    <details className="relative z-[9999] md:hidden">
-      <summary
-        className="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-xl border border-[#E8E2D4] bg-white text-3xl leading-none text-[#111111] [&::-webkit-details-marker]:hidden"
-        aria-label="Open menu"
+    <div className="relative z-[10000] md:hidden">
+      <button
+        type="button"
+        aria-label="Toggle mobile menu"
+        aria-expanded={open}
+        aria-controls="mobile-menu-panel"
+        onClick={() => setOpen((value) => !value)}
+        className="relative z-[10002] flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl border border-[#E8E2D4] bg-white text-3xl leading-none text-[#111111] pointer-events-auto"
       >
         ☰
-      </summary>
+      </button>
 
-      <div className="fixed left-0 right-0 top-[72px] z-[9998] border-t border-[#E8E2D4] bg-white px-5 py-5 shadow-xl">
-        <nav className="flex flex-col gap-4">
-          {links.map((link) => (
+      {open ? (
+        <div
+          id="mobile-menu-panel"
+          className="fixed left-0 right-0 top-[72px] z-[10001] border-t border-[#E8E2D4] bg-white px-5 py-5 shadow-xl pointer-events-auto"
+        >
+          <nav className="flex flex-col gap-4">
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={closeMenu}
+                className="rounded-lg px-2 py-2 text-base font-medium text-[#111111]"
+              >
+                {link.label}
+              </Link>
+            ))}
+
             <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg px-2 py-2 text-base font-medium text-[#111111]"
+              href={telegramHref}
+              onClick={closeMenu}
+              className="mt-2 rounded-full bg-[#111111] px-5 py-3 text-center text-base font-semibold text-white"
             >
-              {link.label}
+              Join Telegram Group
             </Link>
-          ))}
-
-          <Link
-            href={telegramHref}
-            className="mt-2 rounded-full bg-[#111111] px-5 py-3 text-center text-base font-semibold text-white"
-          >
-            Join Telegram Group
-          </Link>
-        </nav>
-      </div>
-    </details>
+          </nav>
+        </div>
+      ) : null}
+    </div>
   );
 }
