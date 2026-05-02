@@ -253,24 +253,84 @@ export default async function Home() {
         Factory Direct · Retail & Wholesale · Order from 1 piece · 7-12 business days
       </div>
 
+      <section className="bg-white">
+        <div className="container-page grid items-center gap-7 py-8 sm:py-12 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10 lg:py-14">
+          <div>
+            <p className="eyebrow">LM Dkbrand · Factory Direct</p>
+            <h1 className="mt-3 max-w-4xl font-serif text-[42px] leading-[1.02] text-ink min-[390px]:text-5xl sm:text-6xl lg:text-7xl lg:leading-[0.96]">
+              Factory Direct Retail & Wholesale
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-muted sm:text-lg sm:leading-7">
+              Order from just 1 piece. Explore apparel, shoes, watches, and
+              bags with fast delivery in 7-12 business days.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link className="btn-primary w-full sm:w-auto" href="/catalog">
+                Shop Catalog
+                <ArrowRight size={18} />
+              </Link>
+              <Link
+                className="btn-secondary w-full sm:w-auto"
+                href={telegram || "/contact"}
+              >
+                <Send size={18} />
+                Join Telegram Group
+              </Link>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {trustPoints.map((point) => (
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted sm:text-sm" key={point}>
+                  <CheckCircle2 size={16} className="text-gold" />
+                  {point}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <img
+              src={getImage(siteImages, "hero_main_image").url}
+              alt={getImage(siteImages, "hero_main_image").alt}
+              className="aspect-[4/3] max-h-[440px] w-full rounded-xl object-cover"
+              loading="eager"
+              decoding="async"
+            />
+            <p className="mt-3 text-center text-xs font-bold uppercase tracking-[0.18em] text-muted">
+              Apparel · Shoes · Watches · Bags
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-pad bg-paper">
+        <div className="container-page">
+          <SectionHeading eyebrow="Catalog" title="Shop by Category" />
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+            {categoryCards.map((category) => (
+              <article className="group overflow-hidden rounded-xl bg-white p-2" key={category.name}>
+                <img
+                  src={getImage(siteImages, category.imageKey).url || category.image}
+                  alt={getImage(siteImages, category.imageKey).alt || category.alt}
+                  className="h-32 w-full rounded-lg object-cover sm:h-56 lg:h-64"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="px-3 pb-4 pt-4">
+                  <h3 className="font-serif text-lg text-ink sm:text-2xl">{category.name}</h3>
+                  <p className="mt-1 text-xs leading-5 text-muted sm:text-sm sm:leading-6">{category.text}</p>
+                  <Link className="mt-3 inline-flex text-xs font-bold text-gold transition group-hover:text-ink sm:text-sm" href={`/catalog?category=${category.name}`}>
+                    View Category
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="section-pad bg-white">
         <div className="container-page">
-          <div className="flex flex-col gap-4 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
-            <div>
-              <p className="eyebrow">New Arrivals</p>
-              <h2 className="mt-2 font-serif text-3xl leading-tight text-ink sm:text-4xl">
-                Selected New Arrivals
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-                Fresh selections from Apparel, Shoes, Watches, and Bags.
-              </p>
-            </div>
-            <Link className="btn-outline mx-auto sm:mx-0" href="/new-arrivals">
-              View All <ArrowRight size={16} />
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SectionHeading eyebrow="New arrivals" title="Selected New Arrivals" />
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-4">
             {newProducts.map(({ product }) => {
               const key = product.product_code;
 
