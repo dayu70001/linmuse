@@ -9,7 +9,7 @@ export default async function CatalogPage({
   searchParams?: Promise<{ category?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const products = await getCatalogProducts();
+  const products = await getCatalogProducts(params?.category);
 
   return (
     <main className="bg-white">

@@ -23,6 +23,29 @@ export type CatalogProduct = {
   badge?: ProductBadge;
 };
 
+const productSelect = [
+  "product_code",
+  "slug",
+  "category",
+  "subcategory",
+  "title_en",
+  "description_en",
+  "sizes_display",
+  "colors_display",
+  "moq",
+  "delivery_time",
+  "main_image_url",
+  "main_thumbnail_url",
+  "gallery_image_urls",
+  "gallery_thumbnail_urls",
+  "image_count",
+  "status",
+  "is_active",
+  "is_featured",
+  "imported_at",
+  "created_at",
+].join(",");
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
@@ -42,6 +65,13 @@ function normalizeGallery(value: unknown): string[] {
     return value.filter((item): item is string => typeof item === "string" && item.length > 0);
   }
   return [];
+}
+
+function parseCategory(value: string | null | undefined): ProductCategory | "All" {
+  if (value === "Apparel" || value === "Shoes" || value === "Watches" || value === "Bags") {
+    return value;
+  }
+  return "All";
 }
 
 function mapProductRow(row: Record<string, unknown>): CatalogProduct {
@@ -124,17 +154,24 @@ async function fetchProducts(path: string) {
   }
 }
 
-export async function getCatalogProducts() {
+export async function getCatalogProducts(category?: string) {
+  const selectedCategory = parseCategory(category);
+  const filters = selectedCategory === "All" ? "" : `&category=eq.${encodeURIComponent(selectedCategory)}`;
   const rows = await fetchProducts(
-    "products?select=product_code,slug,category,subcategory,title_en,title_cn,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured,imported_at,created_at&is_active=eq.true&order=imported_at.desc.nullslast,created_at.desc.nullslast"
+    `products?select=${productSelect}&is_active=eq.true${filters}&order=product_code.desc`
   );
 
-  return rows.length > 0 ? rows : mockProducts.map(mapMockProduct);
+  if (rows.length > 0) return rows;
+
+  const fallbackProducts = mockProducts.map(mapMockProduct);
+  return selectedCategory === "All"
+    ? fallbackProducts
+    : fallbackProducts.filter((product) => product.category === selectedCategory);
 }
 
 export async function getCatalogProductBySlug(slug: string) {
   const rows = await fetchProducts(
-    `products?select=product_code,slug,category,subcategory,title_en,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured&slug=eq.${encodeURIComponent(slug)}&is_active=eq.true&limit=1`
+    `products?select=${productSelect}&slug=eq.${encodeURIComponent(slug)}&is_active=eq.true&limit=1`
   );
 
   if (rows[0]) {

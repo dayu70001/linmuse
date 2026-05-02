@@ -94,25 +94,28 @@ const productionCards = [
   },
 ];
 
-const newArrivalSlots: Array<{ category: ProductCategory; fallbackId: string; imageKey: string }> = [
-  { category: "Apparel", fallbackId: "LM-APP-0001", imageKey: "new_arrival_apparel" },
-  { category: "Shoes", fallbackId: "LM-SHO-0001", imageKey: "new_arrival_shoes" },
-  { category: "Watches", fallbackId: "LM-WAT-0001", imageKey: "new_arrival_watches" },
-  { category: "Bags", fallbackId: "LM-BAG-0001", imageKey: "new_arrival_bags" },
+const newArrivalSlots: Array<{ category: ProductCategory; productCode: string; fallbackId: string }> = [
+  { category: "Apparel", productCode: "LM-APP-0158", fallbackId: "LM-APP-0001" },
+  { category: "Shoes", productCode: "LM-SHO-0175", fallbackId: "LM-SHO-0001" },
+  { category: "Watches", productCode: "LM-WAT-0181", fallbackId: "LM-WAT-0001" },
+  { category: "Bags", productCode: "LM-BAG-0195", fallbackId: "LM-BAG-0001" },
 ] as const;
 
-function getHomeNewArrivals(catalogProducts: CatalogProduct[]) {
+async function getHomeNewArrivals() {
+  const productsByCategory = await Promise.all(
+    newArrivalSlots.map((slot) => getCatalogProducts(slot.category))
+  );
+
   return newArrivalSlots
-    .map((slot) => {
-      const product = catalogProducts.find((item) => item.category === slot.category && item.is_active !== false);
+    .map((slot, index) => {
+      const product = productsByCategory[index].find((item) => item.product_code === slot.productCode);
 
       return {
         product: product || products.find((item) => item.id === slot.fallbackId),
-        imageKey: slot.imageKey,
         isFallback: !product,
       };
     })
-    .filter((item): item is { product: CatalogProduct | (typeof products)[number]; imageKey: string; isFallback: boolean } =>
+    .filter((item): item is { product: CatalogProduct | (typeof products)[number]; isFallback: boolean } =>
       Boolean(item.product)
     );
 }
@@ -125,12 +128,11 @@ const feedbackPreviewKeys = [
 ] as const;
 
 export default async function Home() {
-  const [siteImages, settings, catalogProducts] = await Promise.all([
+  const [siteImages, settings, newProducts] = await Promise.all([
     getSiteImages(),
     getSiteSettings(),
-    getCatalogProducts(),
+    getHomeNewArrivals(),
   ]);
-  const newProducts = getHomeNewArrivals(catalogProducts);
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
