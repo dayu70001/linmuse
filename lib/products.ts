@@ -6,6 +6,7 @@ export type CatalogProduct = {
   category: ProductCategory;
   subcategory: string | null;
   title_en: string;
+  title_cn?: string | null;
   description_en: string | null;
   sizes_display: string | null;
   colors_display: string | null;
@@ -48,22 +49,24 @@ function mapProductRow(row: Record<string, unknown>): CatalogProduct {
   const mainThumbnail = typeof row.main_thumbnail_url === "string" ? row.main_thumbnail_url : null;
   const gallery = normalizeGallery(row.gallery_image_urls);
   const thumbnails = normalizeGallery(row.gallery_thumbnail_urls);
+  const displayImage = mainThumbnail || mainImage || thumbnails[0] || gallery[0] || null;
 
   return {
     product_code: String(row.product_code || ""),
     slug: String(row.slug || row.product_code || ""),
     category: normalizeCategory(typeof row.category === "string" ? row.category : null),
     subcategory: typeof row.subcategory === "string" ? row.subcategory : null,
-    title_en: String(row.title_en || row.product_code || "Selected Product"),
+    title_en: String(row.title_en || row.title_cn || row.product_code || "Selected Product"),
+    title_cn: typeof row.title_cn === "string" ? row.title_cn : null,
     description_en: typeof row.description_en === "string" ? row.description_en : null,
     sizes_display: typeof row.sizes_display === "string" ? row.sizes_display : null,
     colors_display: typeof row.colors_display === "string" ? row.colors_display : null,
     moq: typeof row.moq === "string" ? row.moq : null,
     delivery_time: typeof row.delivery_time === "string" ? row.delivery_time : null,
-    main_image_url: mainImage,
-    main_thumbnail_url: mainThumbnail || mainImage,
-    gallery_image_urls: gallery.length > 0 ? gallery : mainImage ? [mainImage] : [],
-    gallery_thumbnail_urls: thumbnails.length > 0 ? thumbnails : gallery.length > 0 ? gallery : mainImage ? [mainImage] : [],
+    main_image_url: mainImage || gallery[0] || displayImage,
+    main_thumbnail_url: displayImage,
+    gallery_image_urls: gallery.length > 0 ? gallery : displayImage ? [displayImage] : [],
+    gallery_thumbnail_urls: thumbnails.length > 0 ? thumbnails : displayImage ? [displayImage] : [],
     image_count: typeof row.image_count === "number" ? row.image_count : null,
     status: typeof row.status === "string" ? row.status : null,
     is_active: typeof row.is_active === "boolean" ? row.is_active : null,
@@ -123,7 +126,7 @@ async function fetchProducts(path: string) {
 
 export async function getCatalogProducts() {
   const rows = await fetchProducts(
-    "products?select=product_code,slug,category,subcategory,title_en,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured&is_active=eq.true&order=created_at.desc"
+    "products?select=product_code,slug,category,subcategory,title_en,title_cn,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured,imported_at,created_at&is_active=eq.true&order=imported_at.desc.nullslast,created_at.desc.nullslast"
   );
 
   return rows.length > 0 ? rows : mockProducts.map(mapMockProduct);

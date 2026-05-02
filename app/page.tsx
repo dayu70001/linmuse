@@ -13,10 +13,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { products, type ProductCategory } from "@/data/products";
-import type { CatalogProduct } from "@/lib/products";
+import { getCatalogProducts, type CatalogProduct } from "@/lib/products";
 import { getImage, getSetting, getSiteImages, getSiteSettings } from "@/lib/siteData";
 
-import HomeLatestArrivals from "@/components/HomeLatestArrivals";
 const trustPoints = [
   "Orders from 1 piece",
   "Factory Direct",
@@ -102,113 +101,17 @@ const newArrivalSlots: Array<{ category: ProductCategory; fallbackId: string; im
   { category: "Bags", fallbackId: "LM-BAG-0001", imageKey: "new_arrival_bags" },
 ] as const;
 
-type HomeProductRow = {
-  product_code?: string | null;
-  slug?: string | null;
-  category?: string | null;
-  subcategory?: string | null;
-  title_en?: string | null;
-  title_cn?: string | null;
-  description_en?: string | null;
-  sizes_display?: string | null;
-  colors_display?: string | null;
-  moq?: string | null;
-  delivery_time?: string | null;
-  main_image_url?: string | null;
-  main_thumbnail_url?: string | null;
-  gallery_image_urls?: unknown;
-  gallery_thumbnail_urls?: unknown;
-  image_count?: number | null;
-  status?: string | null;
-  is_active?: boolean | null;
-  is_featured?: boolean | null;
-};
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-
-function normalizeGallery(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
-  }
-  return [];
-}
-
-function mapHomeProductRow(row: HomeProductRow, category: ProductCategory): CatalogProduct | null {
-  const productCode = row.product_code || "";
-  const title = row.title_en || row.title_cn || productCode;
-  const galleryThumbnails = normalizeGallery(row.gallery_thumbnail_urls);
-  const galleryImages = normalizeGallery(row.gallery_image_urls);
-  const image =
-    row.main_thumbnail_url ||
-    row.main_image_url ||
-    galleryThumbnails[0] ||
-    galleryImages[0] ||
-    "";
-
-  if (!productCode || !row.slug || !image) return null;
-
-  return {
-    product_code: productCode,
-    slug: row.slug,
-    category,
-    subcategory: row.subcategory || null,
-    title_en: title,
-    description_en: row.description_en || null,
-    sizes_display: row.sizes_display || null,
-    colors_display: row.colors_display || null,
-    moq: row.moq || null,
-    delivery_time: row.delivery_time || null,
-    main_image_url: row.main_image_url || galleryImages[0] || image,
-    main_thumbnail_url: image,
-    gallery_image_urls: galleryImages.length > 0 ? galleryImages : [image],
-    gallery_thumbnail_urls: galleryThumbnails.length > 0 ? galleryThumbnails : [image],
-    image_count: row.image_count || null,
-    status: row.status || null,
-    is_active: row.is_active ?? null,
-    is_featured: row.is_featured ?? null,
-    badge: row.is_featured ? "Popular" : "New",
-  };
-}
-
-async function getLatestActiveProductByCategory(category: ProductCategory) {
-  if (!supabaseUrl || !anonKey) return null;
-
-  const query = new URLSearchParams({
-    select: "product_code,slug,category,subcategory,title_en,title_cn,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured,imported_at,created_at",
-    category: `eq.${category}`,
-    is_active: "eq.true",
-    order: "imported_at.desc.nullslast,created_at.desc.nullslast",
-    limit: "1",
-  });
-
-  try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/products?${query.toString()}`, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      next: { revalidate: 30 },
-    });
-    if (!response.ok) return null;
-    const rows = (await response.json()) as HomeProductRow[];
-    return rows[0] ? mapHomeProductRow(rows[0], category) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function getHomeNewArrivals() {
-  const latestProducts = await Promise.all(
-    newArrivalSlots.map((slot) => getLatestActiveProductByCategory(slot.category))
-  );
-
+function getHomeNewArrivals(catalogProducts: CatalogProduct[]) {
   return newArrivalSlots
-    .map((slot, index) => ({
-      product: latestProducts[index] || products.find((item) => item.id === slot.fallbackId),
-      imageKey: slot.imageKey,
-      isFallback: !latestProducts[index],
-    }))
+    .map((slot) => {
+      const product = catalogProducts.find((item) => item.category === slot.category && item.is_active !== false);
+
+      return {
+        product: product || products.find((item) => item.id === slot.fallbackId),
+        imageKey: slot.imageKey,
+        isFallback: !product,
+      };
+    })
     .filter((item): item is { product: CatalogProduct | (typeof products)[number]; imageKey: string; isFallback: boolean } =>
       Boolean(item.product)
     );
@@ -222,11 +125,12 @@ const feedbackPreviewKeys = [
 ] as const;
 
 export default async function Home() {
-  const [siteImages, settings, newProducts] = await Promise.all([
+  const [siteImages, settings, catalogProducts] = await Promise.all([
     getSiteImages(),
     getSiteSettings(),
-    getHomeNewArrivals(),
+    getCatalogProducts(),
   ]);
+  const newProducts = getHomeNewArrivals(catalogProducts);
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
@@ -242,7 +146,32 @@ export default async function Home() {
         Factory Direct · Retail & Wholesale · Order from 1 piece · 7-12 business days
       </div>
 
-      <HomeLatestArrivals />
+      <section className="section-pad bg-white">
+        <div className="container-page">
+          <div className="flex flex-col gap-4 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
+            <div>
+              <p className="eyebrow">New Arrivals</p>
+              <h2 className="mt-2 font-serif text-3xl leading-tight text-ink sm:text-4xl">
+                Selected New Arrivals
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+                Fresh selections from Apparel, Shoes, Watches, and Bags.
+              </p>
+            </div>
+            <Link className="btn-outline mx-auto sm:mx-0" href="/new-arrivals">
+              View All <ArrowRight size={16} />
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {newProducts.map(({ product }) => {
+              const key = "product_code" in product ? product.product_code : product.id;
+
+              return <ProductCard key={key} product={product} />;
+            })}
+          </div>
+        </div>
+      </section>
 
       <section className="section-pad bg-paper">
         <div className="container-page">
