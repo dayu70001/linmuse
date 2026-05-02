@@ -12,8 +12,8 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import { products, type ProductCategory } from "@/data/products";
-import { getCatalogProducts, type CatalogProduct } from "@/lib/products";
+import type { ProductCategory } from "@/data/products";
+import type { CatalogProduct } from "@/lib/products";
 import { getImage, getSetting, getSiteImages, getSiteSettings } from "@/lib/siteData";
 
 const trustPoints = [
@@ -94,27 +94,135 @@ const productionCards = [
   },
 ];
 
-const newArrivalSlots: Array<{ category: ProductCategory; fallbackId: string; imageKey: string }> = [
-  { category: "Apparel", fallbackId: "LM-APP-0001", imageKey: "new_arrival_apparel" },
-  { category: "Shoes", fallbackId: "LM-SHO-0001", imageKey: "new_arrival_shoes" },
-  { category: "Watches", fallbackId: "LM-WAT-0001", imageKey: "new_arrival_watches" },
-  { category: "Bags", fallbackId: "LM-BAG-0001", imageKey: "new_arrival_bags" },
+const newArrivalSlots: Array<{ category: ProductCategory; productCode: string }> = [
+  { category: "Apparel", productCode: "LM-APP-0158" },
+  { category: "Shoes", productCode: "LM-SHO-0175" },
+  { category: "Watches", productCode: "LM-WAT-0181" },
+  { category: "Bags", productCode: "LM-BAG-0195" },
 ] as const;
 
-function getHomeNewArrivals(catalogProducts: CatalogProduct[]) {
-  return newArrivalSlots
-    .map((slot) => {
-      const product = catalogProducts.find((item) => item.category === slot.category && item.is_active !== false);
+type HomeProductRow = {
+  product_code?: string | null;
+  slug?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  title_en?: string | null;
+  title_cn?: string | null;
+  description_en?: string | null;
+  sizes_display?: string | null;
+  colors_display?: string | null;
+  moq?: string | null;
+  delivery_time?: string | null;
+  main_image_url?: string | null;
+  main_thumbnail_url?: string | null;
+  gallery_image_urls?: unknown;
+  gallery_thumbnail_urls?: unknown;
+  image_count?: number | null;
+  status?: string | null;
+  is_active?: boolean | null;
+  is_featured?: boolean | null;
+};
 
-      return {
-        product: product || products.find((item) => item.id === slot.fallbackId),
-        imageKey: slot.imageKey,
-        isFallback: !product,
-      };
-    })
-    .filter((item): item is { product: CatalogProduct | (typeof products)[number]; imageKey: string; isFallback: boolean } =>
-      Boolean(item.product)
-    );
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+function normalizeGallery(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  }
+  return [];
+}
+
+function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
+  const galleryImages = normalizeGallery(row.gallery_image_urls);
+  const galleryThumbnails = normalizeGallery(row.gallery_thumbnail_urls);
+  const image =
+    row.main_thumbnail_url ||
+    row.main_image_url ||
+    galleryThumbnails[0] ||
+    galleryImages[0] ||
+    "";
+  const productCode = row.product_code || "";
+
+  if (!productCode || !row.slug || !image) {
+    throw new Error(`Selected New Arrivals product is missing required data: ${productCode || "unknown"}`);
+  }
+
+  return {
+    product_code: productCode,
+    slug: row.slug,
+    category: row.category as ProductCategory,
+    subcategory: row.subcategory || null,
+    title_en: row.title_en || row.title_cn || productCode,
+    title_cn: row.title_cn || null,
+    description_en: row.description_en || null,
+    sizes_display: row.sizes_display || null,
+    colors_display: row.colors_display || null,
+    moq: row.moq || null,
+    delivery_time: row.delivery_time || null,
+    main_image_url: row.main_image_url || galleryImages[0] || image,
+    main_thumbnail_url: image,
+    gallery_image_urls: galleryImages.length > 0 ? galleryImages : [image],
+    gallery_thumbnail_urls: galleryThumbnails.length > 0 ? galleryThumbnails : [image],
+    image_count: row.image_count || null,
+    status: row.status || null,
+    is_active: row.is_active ?? null,
+    is_featured: row.is_featured ?? null,
+    badge: row.is_featured ? "Popular" : "New",
+  };
+}
+
+async function getHomeNewArrivals() {
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Selected New Arrivals requires Supabase environment variables.");
+  }
+
+  const productCodes = newArrivalSlots.map((slot) => slot.productCode);
+  const select = [
+    "product_code",
+    "slug",
+    "category",
+    "subcategory",
+    "title_en",
+    "description_en",
+    "sizes_display",
+    "colors_display",
+    "moq",
+    "delivery_time",
+    "main_image_url",
+    "main_thumbnail_url",
+    "gallery_image_urls",
+    "gallery_thumbnail_urls",
+    "image_count",
+    "status",
+    "is_active",
+    "is_featured",
+  ].join(",");
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/products?select=${select}&product_code=in.(${productCodes.join(",")})&is_active=eq.true`,
+    {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      next: { revalidate: 30 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Selected New Arrivals products could not be loaded: HTTP ${response.status}`);
+  }
+
+  const rows = (await response.json()) as HomeProductRow[];
+  const productsByCode = new Map(rows.map((row) => [row.product_code, mapHomeProductRow(row)]));
+
+  return newArrivalSlots.map((slot) => {
+    const product = productsByCode.get(slot.productCode);
+    if (!product) {
+      throw new Error(`Selected New Arrivals product not found or inactive: ${slot.productCode}`);
+    }
+    return { product };
+  });
 }
 
 const feedbackPreviewKeys = [
@@ -125,12 +233,11 @@ const feedbackPreviewKeys = [
 ] as const;
 
 export default async function Home() {
-  const [siteImages, settings, catalogProducts] = await Promise.all([
+  const [siteImages, settings, newProducts] = await Promise.all([
     getSiteImages(),
     getSiteSettings(),
-    getCatalogProducts(),
+    getHomeNewArrivals(),
   ]);
-  const newProducts = getHomeNewArrivals(catalogProducts);
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
@@ -165,7 +272,7 @@ export default async function Home() {
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {newProducts.map(({ product }) => {
-              const key = "product_code" in product ? product.product_code : product.id;
+              const key = product.product_code;
 
               return <ProductCard key={key} product={product} />;
             })}
