@@ -12,7 +12,8 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import { products } from "@/data/products";
+import { products, type ProductCategory } from "@/data/products";
+import type { CatalogProduct } from "@/lib/products";
 import { getImage, getSetting, getSiteImages, getSiteSettings } from "@/lib/siteData";
 
 const trustPoints = [
@@ -93,12 +94,124 @@ const productionCards = [
   },
 ];
 
-const newArrivalSlots = [
-  ["LM-APP-0001", "new_arrival_apparel"],
-  ["LM-SHO-0001", "new_arrival_shoes"],
-  ["LM-WAT-0001", "new_arrival_watches"],
-  ["LM-BAG-0001", "new_arrival_bags"],
+const newArrivalSlots: Array<{ category: ProductCategory; fallbackId: string; imageKey: string }> = [
+  { category: "Apparel", fallbackId: "LM-APP-0001", imageKey: "new_arrival_apparel" },
+  { category: "Shoes", fallbackId: "LM-SHO-0001", imageKey: "new_arrival_shoes" },
+  { category: "Watches", fallbackId: "LM-WAT-0001", imageKey: "new_arrival_watches" },
+  { category: "Bags", fallbackId: "LM-BAG-0001", imageKey: "new_arrival_bags" },
 ] as const;
+
+type HomeProductRow = {
+  product_code?: string | null;
+  slug?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  title_en?: string | null;
+  title_cn?: string | null;
+  description_en?: string | null;
+  sizes_display?: string | null;
+  colors_display?: string | null;
+  moq?: string | null;
+  delivery_time?: string | null;
+  main_image_url?: string | null;
+  main_thumbnail_url?: string | null;
+  gallery_image_urls?: unknown;
+  gallery_thumbnail_urls?: unknown;
+  image_count?: number | null;
+  status?: string | null;
+  is_active?: boolean | null;
+  is_featured?: boolean | null;
+};
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+function normalizeGallery(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  }
+  return [];
+}
+
+function mapHomeProductRow(row: HomeProductRow, category: ProductCategory): CatalogProduct | null {
+  const productCode = row.product_code || "";
+  const title = row.title_en || row.title_cn || productCode;
+  const galleryThumbnails = normalizeGallery(row.gallery_thumbnail_urls);
+  const galleryImages = normalizeGallery(row.gallery_image_urls);
+  const image =
+    row.main_thumbnail_url ||
+    row.main_image_url ||
+    galleryThumbnails[0] ||
+    galleryImages[0] ||
+    "";
+
+  if (!productCode || !row.slug || !image) return null;
+
+  return {
+    product_code: productCode,
+    slug: row.slug,
+    category,
+    subcategory: row.subcategory || null,
+    title_en: title,
+    description_en: row.description_en || null,
+    sizes_display: row.sizes_display || null,
+    colors_display: row.colors_display || null,
+    moq: row.moq || null,
+    delivery_time: row.delivery_time || null,
+    main_image_url: row.main_image_url || galleryImages[0] || image,
+    main_thumbnail_url: image,
+    gallery_image_urls: galleryImages.length > 0 ? galleryImages : [image],
+    gallery_thumbnail_urls: galleryThumbnails.length > 0 ? galleryThumbnails : [image],
+    image_count: row.image_count || null,
+    status: row.status || null,
+    is_active: row.is_active ?? null,
+    is_featured: row.is_featured ?? null,
+    badge: row.is_featured ? "Popular" : "New",
+  };
+}
+
+async function getLatestActiveProductByCategory(category: ProductCategory) {
+  if (!supabaseUrl || !anonKey) return null;
+
+  const query = new URLSearchParams({
+    select: "product_code,slug,category,subcategory,title_en,title_cn,description_en,sizes_display,colors_display,moq,delivery_time,main_image_url,main_thumbnail_url,gallery_image_urls,gallery_thumbnail_urls,image_count,status,is_active,is_featured,imported_at,created_at",
+    category: `eq.${category}`,
+    is_active: "eq.true",
+    order: "imported_at.desc.nullslast,created_at.desc.nullslast",
+    limit: "1",
+  });
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/products?${query.toString()}`, {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      next: { revalidate: 30 },
+    });
+    if (!response.ok) return null;
+    const rows = (await response.json()) as HomeProductRow[];
+    return rows[0] ? mapHomeProductRow(rows[0], category) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getHomeNewArrivals() {
+  const latestProducts = await Promise.all(
+    newArrivalSlots.map((slot) => getLatestActiveProductByCategory(slot.category))
+  );
+
+  return newArrivalSlots
+    .map((slot, index) => ({
+      product: latestProducts[index] || products.find((item) => item.id === slot.fallbackId),
+      imageKey: slot.imageKey,
+      isFallback: !latestProducts[index],
+    }))
+    .filter((item): item is { product: CatalogProduct | (typeof products)[number]; imageKey: string; isFallback: boolean } =>
+      Boolean(item.product)
+    );
+}
 
 const feedbackPreviewKeys = [
   "customer_feedback_01",
@@ -108,7 +221,11 @@ const feedbackPreviewKeys = [
 ] as const;
 
 export default async function Home() {
-  const [siteImages, settings] = await Promise.all([getSiteImages(), getSiteSettings()]);
+  const [siteImages, settings, newProducts] = await Promise.all([
+    getSiteImages(),
+    getSiteSettings(),
+    getHomeNewArrivals(),
+  ]);
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
@@ -118,15 +235,6 @@ export default async function Home() {
     ["Instagram", instagram || "/contact"],
     ["Facebook", facebook || "/contact"],
   ];
-  const newProducts = newArrivalSlots
-    .map(([id, imageKey]) => ({
-      product: products.find((item) => item.id === id),
-      imageKey,
-    }))
-    .filter((item): item is { product: (typeof products)[number]; imageKey: (typeof newArrivalSlots)[number][1] } =>
-      Boolean(item.product)
-    );
-
   return (
     <main>
       <div className="bg-ink px-4 py-2.5 text-center text-xs font-semibold text-white">
@@ -211,11 +319,11 @@ export default async function Home() {
         <div className="container-page">
           <SectionHeading eyebrow="New arrivals" title="Selected New Arrivals" />
           <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-4">
-            {newProducts.map(({ product, imageKey }) => (
+            {newProducts.map(({ product, imageKey, isFallback }) => (
               <ProductCard
                 product={product}
-                imageOverride={getImage(siteImages, imageKey).url}
-                key={product.id}
+                imageOverride={isFallback ? getImage(siteImages, imageKey).url : undefined}
+                key={"product_code" in product ? product.product_code : product.id}
               />
             ))}
           </div>
