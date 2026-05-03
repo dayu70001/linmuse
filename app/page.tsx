@@ -96,7 +96,7 @@ const productionCards = [
 
 const newArrivalSlots: Array<{ category: ProductCategory; productCode: string }> = [
   { category: "Apparel", productCode: "LM-APP-0158" },
-  { category: "Shoes", productCode: "LM-SHO-0175" },
+  { category: "Shoes", productCode: "LM-SHO-0157" },
   { category: "Watches", productCode: "LM-WAT-0181" },
   { category: "Bags", productCode: "LM-BAG-0195" },
 ] as const;
