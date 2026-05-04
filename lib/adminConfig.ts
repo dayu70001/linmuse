@@ -189,6 +189,7 @@ export const settingSlots: SettingSlot[] = [
   { key: "whatsapp_retail", label: "WhatsApp retail number", section: "Contact", fallback: "" },
   { key: "whatsapp_wholesale", label: "WhatsApp wholesale number", section: "Contact", fallback: "" },
   { key: "whatsapp_after_sales", label: "WhatsApp after-sales number", section: "Contact", fallback: "" },
+  { key: "whatsapp_group_url", label: "WhatsApp Group Link", section: "Social", fallback: "" },
   { key: "telegram_channel", label: "Telegram channel", section: "Social", fallback: "" },
   { key: "instagram_url", label: "Instagram URL", section: "Social", fallback: "" },
   { key: "facebook_url", label: "Facebook URL", section: "Social", fallback: "" },

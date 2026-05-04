@@ -7,6 +7,7 @@ import { getSetting, getSiteSettings } from "@/lib/siteData";
 export default async function ContactPage() {
   const settings = await getSiteSettings();
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
+  const whatsappGroup = getSetting(settings, "whatsapp_group_url");
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
   const email = getSetting(settings, "email") || siteConfig.email;
@@ -21,7 +22,7 @@ export default async function ContactPage() {
       title: "WhatsApp Group",
       text: "Use the group/community channel when available for product updates and announcements.",
       icon: Users,
-      href: "/contact",
+      href: whatsappGroup || "/contact",
     },
     {
       title: "Instagram",
@@ -66,7 +67,7 @@ export default async function ContactPage() {
               <h2 className="font-serif text-2xl text-ink">Customer Support</h2>
               <div className="mt-5 grid gap-3 text-sm font-semibold text-muted sm:grid-cols-2">
                 <Link href={telegram || "/contact"}>Telegram Group</Link>
-                <Link href="/contact">WhatsApp Group</Link>
+                <Link href={whatsappGroup || "/contact"}>WhatsApp Group</Link>
                 <Link href={instagram || "/contact"}>Instagram</Link>
                 <Link href={facebook || "/contact"}>Facebook</Link>
                 <Link href={`mailto:${email}`}>

@@ -239,11 +239,12 @@ export default async function Home() {
     getHomeNewArrivals(),
   ]);
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
+  const whatsappGroup = getSetting(settings, "whatsapp_group_url");
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
   const socialLinks = [
     ["Telegram Group", telegram || "/contact"],
-    ["WhatsApp Group", "/contact"],
+    ["WhatsApp Group", whatsappGroup || "/contact"],
     ["Instagram", instagram || "/contact"],
     ["Facebook", facebook || "/contact"],
   ];
