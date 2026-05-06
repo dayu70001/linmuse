@@ -1,4 +1,5 @@
 import { Camera, PackageCheck, Video } from "lucide-react";
+import Link from "next/link";
 import { FeedbackGallery } from "@/components/FeedbackGallery";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getImage, getSiteImages } from "@/lib/siteData";
@@ -61,6 +62,14 @@ export default async function ShippingProofPage() {
           <p className="mx-auto mt-4 max-w-2xl rounded bg-paper px-4 py-3 text-center text-sm font-semibold text-muted">
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
+          <div className="mt-5 flex justify-center">
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
+              href="/track-order"
+            >
+              Track Your Order
+            </Link>
+          </div>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {proofSections.map((section) => {
               const Icon = section.icon;

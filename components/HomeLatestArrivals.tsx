@@ -1,3 +1,5 @@
+import { HOME_FEATURED_CATEGORIES } from "@/lib/catalogTaxonomy";
+
 type ProductRow = {
   product_code?: string;
   slug?: string;
@@ -6,75 +8,12 @@ type ProductRow = {
   title_cn?: string;
   main_thumbnail_url?: string;
   main_image_url?: string;
-  gallery_thumbnail_urls?: string[] | string | null;
-  gallery_image_urls?: string[] | string | null;
   imported_at?: string | null;
   created_at?: string | null;
 };
 
-const CATEGORIES = ["Apparel", "Shoes", "Watches", "Bags"] as const;
-
-const FALLBACKS: Record<string, ProductRow> = {
-  Apparel: {
-    product_code: "LM-APP",
-    slug: "catalog?category=Apparel",
-    category: "Apparel",
-    title_en: "Latest Apparel Selection",
-  },
-  Shoes: {
-    product_code: "LM-SHO",
-    slug: "catalog?category=Shoes",
-    category: "Shoes",
-    title_en: "Latest Shoes Selection",
-  },
-  Watches: {
-    product_code: "LM-WAT",
-    slug: "catalog?category=Watches",
-    category: "Watches",
-    title_en: "Latest Watches Selection",
-  },
-  Bags: {
-    product_code: "LM-BAG",
-    slug: "catalog?category=Bags",
-    category: "Bags",
-    title_en: "Latest Bags Selection",
-  },
-};
-
-function firstFromMaybeArray(value: unknown): string {
-  if (!value) return "";
-
-  if (Array.isArray(value)) {
-    return typeof value[0] === "string" ? value[0] : "";
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return "";
-
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed) && typeof parsed[0] === "string" ? parsed[0] : "";
-      } catch {
-        return trimmed;
-      }
-    }
-
-    return trimmed;
-  }
-
-  return "";
-}
-
 function imageFor(product: ProductRow): string {
-  return (
-    product.main_thumbnail_url ||
-    product.main_image_url ||
-    firstFromMaybeArray(product.gallery_thumbnail_urls) ||
-    firstFromMaybeArray(product.gallery_image_urls) ||
-    ""
-  );
+  return product.main_thumbnail_url || product.main_image_url || "";
 }
 
 function titleFor(product: ProductRow): string {
@@ -103,8 +42,6 @@ async function fetchLatestByCategory(category: string): Promise<ProductRow | nul
     "title_cn",
     "main_thumbnail_url",
     "main_image_url",
-    "gallery_thumbnail_urls",
-    "gallery_image_urls",
     "imported_at",
     "created_at",
   ].join(",");
@@ -113,6 +50,7 @@ async function fetchLatestByCategory(category: string): Promise<ProductRow | nul
     select,
     category: `eq.${category}`,
     is_active: "eq.true",
+    status: "eq.published",
     order: "imported_at.desc.nullslast,created_at.desc.nullslast",
     limit: "1",
   });
@@ -136,11 +74,12 @@ async function fetchLatestByCategory(category: string): Promise<ProductRow | nul
 
 export default async function HomeLatestArrivals() {
   const latest = await Promise.all(
-    CATEGORIES.map(async (category) => {
+    HOME_FEATURED_CATEGORIES.map(async (category) => {
       const product = await fetchLatestByCategory(category);
-      return product || FALLBACKS[category];
+      return product;
     })
   );
+  const products = latest.filter((product): product is ProductRow => Boolean(product));
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -149,12 +88,13 @@ export default async function HomeLatestArrivals() {
           New Arrivals
         </p>
         <h2 className="mt-3 font-serif text-4xl font-semibold tracking-tight text-neutral-950 sm:text-5xl">
-          Selected New Arrivals
+          Featured Picks
         </h2>
       </div>
 
+      {products.length > 0 ? (
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {latest.map((product) => {
+        {products.map((product) => {
           const img = imageFor(product);
           const title = titleFor(product);
           const category = product.category || "Product";
@@ -193,6 +133,11 @@ export default async function HomeLatestArrivals() {
           );
         })}
       </div>
+      ) : (
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm font-semibold text-neutral-500">
+          Products are being updated.
+        </div>
+      )}
     </section>
   );
 }

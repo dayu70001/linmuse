@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Product } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
 
@@ -11,15 +10,15 @@ export function ProductCard({
 }) {
   const productCode = "product_code" in product ? product.product_code : product.id;
   const title = "title_en" in product ? product.title_en : product.title;
-  const mainImage = imageOverride || ("main_thumbnail_url" in product ? product.main_thumbnail_url || product.main_image_url || "" : product.mainImage);
+  const mainImage = imageOverride || ("main_thumbnail_url" in product ? product.main_thumbnail_url || "" : product.mainImage);
 
   return (
-    <article className="overflow-hidden rounded-lg border border-line/60 bg-white transition duration-200 hover:border-gold/70">
-      <Link href={`/catalog/${product.slug}`} className="block bg-paper">
+    <article className="relative overflow-hidden rounded-lg border border-line/60 bg-white transition duration-200 hover:border-gold/70">
+      <a href={`/catalog/${product.slug}`} className="relative z-10 block bg-paper">
         <img
           src={mainImage}
           alt={title}
-          className="aspect-square w-full object-cover"
+          className="pointer-events-none aspect-square w-full select-none object-cover"
           loading="lazy"
           decoding="async"
         />
@@ -32,7 +31,7 @@ export function ProductCard({
             {title}
           </h3>
         </div>
-      </Link>
+      </a>
     </article>
   );
 }

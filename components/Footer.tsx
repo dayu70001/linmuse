@@ -14,7 +14,7 @@ export async function Footer() {
     ["WhatsApp Group", whatsappGroup || "/contact"],
     ["Instagram", instagram || "/contact"],
     ["Facebook", facebook || "/contact"],
-    ["Email", `mailto:${email}`],
+    ["Email", "/contact"],
   ];
 
   return (
@@ -34,6 +34,7 @@ export async function Footer() {
                 {item.label}
               </Link>
             ))}
+            <Link href="/track-order">Track Order</Link>
           </div>
         </div>
         <div>

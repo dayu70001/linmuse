@@ -12,9 +12,10 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import type { ProductCategory } from "@/data/products";
 import type { CatalogProduct } from "@/lib/products";
 import { getImage, getSetting, getSiteImages, getSiteSettings } from "@/lib/siteData";
+
+type ProductCategory = string;
 
 const trustPoints = [
   "Orders from 1 piece",
@@ -108,16 +109,7 @@ type HomeProductRow = {
   subcategory?: string | null;
   title_en?: string | null;
   title_cn?: string | null;
-  description_en?: string | null;
-  sizes_display?: string | null;
-  colors_display?: string | null;
-  moq?: string | null;
-  delivery_time?: string | null;
-  main_image_url?: string | null;
   main_thumbnail_url?: string | null;
-  gallery_image_urls?: unknown;
-  gallery_thumbnail_urls?: unknown;
-  image_count?: number | null;
   status?: string | null;
   is_active?: boolean | null;
   is_featured?: boolean | null;
@@ -126,26 +118,12 @@ type HomeProductRow = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-function normalizeGallery(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
-  }
-  return [];
-}
-
 function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
-  const galleryImages = normalizeGallery(row.gallery_image_urls);
-  const galleryThumbnails = normalizeGallery(row.gallery_thumbnail_urls);
-  const image =
-    row.main_thumbnail_url ||
-    row.main_image_url ||
-    galleryThumbnails[0] ||
-    galleryImages[0] ||
-    "";
+  const image = row.main_thumbnail_url || "";
   const productCode = row.product_code || "";
 
   if (!productCode || !row.slug || !image) {
-    throw new Error(`Selected New Arrivals product is missing required data: ${productCode || "unknown"}`);
+    throw new Error(`Featured Picks product is missing required data: ${productCode || "unknown"}`);
   }
 
   return {
@@ -155,16 +133,16 @@ function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
     subcategory: row.subcategory || null,
     title_en: row.title_en || row.title_cn || productCode,
     title_cn: row.title_cn || null,
-    description_en: row.description_en || null,
-    sizes_display: row.sizes_display || null,
-    colors_display: row.colors_display || null,
-    moq: row.moq || null,
-    delivery_time: row.delivery_time || null,
-    main_image_url: row.main_image_url || galleryImages[0] || image,
+    description_en: null,
+    sizes_display: null,
+    colors_display: null,
+    moq: null,
+    delivery_time: null,
+    main_image_url: image,
     main_thumbnail_url: image,
-    gallery_image_urls: galleryImages.length > 0 ? galleryImages : [image],
-    gallery_thumbnail_urls: galleryThumbnails.length > 0 ? galleryThumbnails : [image],
-    image_count: row.image_count || null,
+    gallery_image_urls: [],
+    gallery_thumbnail_urls: [],
+    image_count: null,
     status: row.status || null,
     is_active: row.is_active ?? null,
     is_featured: row.is_featured ?? null,
@@ -174,7 +152,7 @@ function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
 
 async function getHomeNewArrivals() {
   if (!supabaseUrl || !anonKey) {
-    throw new Error("Selected New Arrivals requires Supabase environment variables.");
+    return [];
   }
 
   const productCodes = newArrivalSlots.map((slot) => slot.productCode);
@@ -184,45 +162,37 @@ async function getHomeNewArrivals() {
     "category",
     "subcategory",
     "title_en",
-    "description_en",
-    "sizes_display",
-    "colors_display",
-    "moq",
-    "delivery_time",
-    "main_image_url",
     "main_thumbnail_url",
-    "gallery_image_urls",
-    "gallery_thumbnail_urls",
-    "image_count",
     "status",
     "is_active",
     "is_featured",
   ].join(",");
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/products?select=${select}&product_code=in.(${productCodes.join(",")})&is_active=eq.true`,
-    {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      next: { revalidate: 30 },
-    }
-  );
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/products?select=${select}&product_code=in.(${productCodes.join(",")})&is_active=eq.true&status=eq.published`,
+      {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+        },
+        next: { revalidate: 30 },
+      }
+    );
 
-  if (!response.ok) {
-    throw new Error(`Selected New Arrivals products could not be loaded: HTTP ${response.status}`);
+    if (!response.ok) {
+      return [];
+    }
+
+    const rows = (await response.json()) as HomeProductRow[];
+    const productsByCode = new Map(rows.map((row) => [row.product_code, mapHomeProductRow(row)]));
+    const selected = newArrivalSlots
+      .map((slot) => productsByCode.get(slot.productCode))
+      .filter((product): product is CatalogProduct => Boolean(product));
+
+    return selected.map((product) => ({ product }));
+  } catch {
+    return [];
   }
-
-  const rows = (await response.json()) as HomeProductRow[];
-  const productsByCode = new Map(rows.map((row) => [row.product_code, mapHomeProductRow(row)]));
-
-  return newArrivalSlots.map((slot) => {
-    const product = productsByCode.get(slot.productCode);
-    if (!product) {
-      throw new Error(`Selected New Arrivals product not found or inactive: ${slot.productCode}`);
-    }
-    return { product };
-  });
 }
 
 const feedbackPreviewKeys = [
@@ -263,7 +233,7 @@ export default async function Home() {
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-muted sm:text-lg sm:leading-7">
               Order from just 1 piece. Explore apparel, shoes, watches, and
-              bags with fast delivery in 7-12 business days.
+              bags, and selected lifestyle accessories with fast delivery in 7-12 business days.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link className="btn-primary w-full sm:w-auto" href="/catalog">
@@ -296,7 +266,7 @@ export default async function Home() {
               decoding="async"
             />
             <p className="mt-3 text-center text-xs font-bold uppercase tracking-[0.18em] text-muted">
-              Apparel · Shoes · Watches · Bags
+              Apparel · Shoes · Watches · Bags · Lifestyle Accessories
             </p>
           </div>
         </div>
@@ -330,14 +300,20 @@ export default async function Home() {
 
       <section className="section-pad bg-white">
         <div className="container-page">
-          <SectionHeading eyebrow="New arrivals" title="Selected New Arrivals" />
-          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-4">
-            {newProducts.map(({ product }) => {
-              const key = product.product_code;
+          <SectionHeading eyebrow="New arrivals" title="Featured Picks" />
+          {newProducts.length > 0 ? (
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-4">
+              {newProducts.map(({ product }) => {
+                const key = product.product_code;
 
-              return <ProductCard key={key} product={product} />;
-            })}
-          </div>
+                return <ProductCard key={key} product={product} />;
+              })}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-xl border border-line bg-white p-6 text-center text-sm font-semibold text-muted">
+              Products are being updated.
+            </div>
+          )}
         </div>
       </section>
 

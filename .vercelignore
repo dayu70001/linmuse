@@ -1,0 +1,28 @@
+# dependencies / local build
+node_modules/
+.next/
+.vercel/cache/
+
+# local imports / scraping / downloaded products
+imports/
+tmp/
+logs/
+*.log
+.last-*
+*.pid
+
+# local reports / backups
+r2-*.json
+r2-*.json.*
+classification-*.json
+*watches*report*.json
+*watches*backup*.json
+*.bak.*
+*.backup.*
+*.before-*.json
+
+# tests / tooling
+playwright-report/
+test-results/
+coverage/
+.DS_Store

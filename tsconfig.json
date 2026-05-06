@@ -38,6 +38,8 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scripts/**/*.ts",
+    "backup-mobile-pagination-20260502-021329"
   ]
 }

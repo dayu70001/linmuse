@@ -38,8 +38,11 @@ type Args = {
   input: string;
   category: string;
   dryRun: boolean;
+  debugPayloadOnly: boolean;
+  validateJsonOnly: boolean;
   publish: boolean;
   uploadConcurrency: number;
+  debugCodes: string[];
 };
 
 type Report = {
@@ -73,10 +76,20 @@ type Report = {
 const bucketName = "product-images";
 const defaultSizes = "Contact us for current size availability";
 const defaultColors = "Contact us for available color options";
+const chineseTextRe = /[\u3400-\u9fff]/;
+const badControlRe = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
+const replacementCharRe = /\uFFFD/;
 
 type ExistingProduct = {
   product_code: string;
   source_fingerprint: string | null;
+};
+
+type PayloadValidation = {
+  ok: boolean;
+  product_code?: string;
+  body_length: number;
+  issues: string[];
 };
 
 function parseArgs(): Args {
@@ -85,8 +98,11 @@ function parseArgs(): Args {
     input: "",
     category: "Apparel",
     dryRun: false,
+    debugPayloadOnly: false,
+    validateJsonOnly: false,
     publish: false,
     uploadConcurrency: 3,
+    debugCodes: ["LM-SHO-0163", "LM-SHO-0164", "LM-SHO-0165"],
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -99,6 +115,18 @@ function parseArgs(): Args {
       index += 1;
     } else if (value === "--dry-run") {
       args.dryRun = true;
+    } else if (value === "--debug-payload-only") {
+      args.debugPayloadOnly = true;
+      args.dryRun = true;
+    } else if (value === "--validate-json-only") {
+      args.validateJsonOnly = true;
+      args.dryRun = true;
+    } else if (value === "--debug-codes") {
+      args.debugCodes = (argv[index + 1] || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      index += 1;
     } else if (value === "--publish") {
       args.publish = true;
     } else if (value === "--upload-concurrency") {
@@ -228,12 +256,212 @@ function localThumbnailPaths(row: ImportRow, importDir: string) {
   return [];
 }
 
+function storagePublicUrl(supabaseUrl: string, storagePath: string) {
+  if (!supabaseUrl) return `${bucketName}/${storagePath}`;
+  return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${storagePath}`;
+}
+
+function plannedPublicUrls(filePaths: string[], storageFolder: string, kind: "display" | "thumbs", supabaseUrl: string) {
+  return filePaths.map((filePath) => storagePublicUrl(supabaseUrl, `${storageFolder}/${kind}/${path.basename(filePath)}`));
+}
+
+function sanitizePayloadText(value: unknown) {
+  const input = String(value ?? "");
+  let output = "";
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = input.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        output += input[index] + input[index + 1];
+        index += 1;
+      }
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      continue;
+    }
+    output += input[index];
+  }
+  return output
+    .replace(replacementCharRe, "")
+    .replace(badControlRe, "")
+    .normalize("NFC");
+}
+
+function sanitizeJsonValue(value: unknown): unknown {
+  if (typeof value === "string") return sanitizePayloadText(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizeJsonValue(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, sanitizeJsonValue(item)])
+    );
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  return value;
+}
+
+function hasUnpairedSurrogate(value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectJsonValueIssues(value: unknown, pathName = "$", issues: string[] = []) {
+  if (value === undefined) {
+    issues.push(`${pathName}: undefined`);
+    return issues;
+  }
+  if (typeof value === "bigint") {
+    issues.push(`${pathName}: BigInt`);
+    return issues;
+  }
+  if (typeof value === "function" || typeof value === "symbol") {
+    issues.push(`${pathName}: unsupported ${typeof value}`);
+    return issues;
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    issues.push(`${pathName}: non-finite number`);
+    return issues;
+  }
+  if (typeof value === "string") {
+    if (replacementCharRe.test(value)) issues.push(`${pathName}: replacement character`);
+    if (badControlRe.test(value)) issues.push(`${pathName}: illegal control character`);
+    if (hasUnpairedSurrogate(value)) issues.push(`${pathName}: unpaired surrogate`);
+    return issues;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectJsonValueIssues(item, `${pathName}[${index}]`, issues));
+    return issues;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      collectJsonValueIssues(item, `${pathName}.${key}`, issues);
+    }
+  }
+  return issues;
+}
+
 function contentTypeFor(filePath: string) {
   const extension = path.extname(filePath).toLowerCase();
   if (extension === ".webp") return "image/webp";
   if (extension === ".png") return "image/png";
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
   return "application/octet-stream";
+}
+
+function buildProductPayload({
+  row,
+  rowCategory,
+  assignedProductCode,
+  assignedSlug,
+  publicUrls,
+  thumbnailUrls,
+  rowFingerprint,
+  importBatchId,
+  importedAt,
+  publish,
+}: {
+  row: ImportRow;
+  rowCategory: string;
+  assignedProductCode: string;
+  assignedSlug: string;
+  publicUrls: string[];
+  thumbnailUrls: string[];
+  rowFingerprint: string;
+  importBatchId: string;
+  importedAt: string;
+  publish: boolean;
+}) {
+  const desiredStatus = publish ? "published" : row.status || "draft";
+  const desiredIsActive = desiredStatus === "published" || desiredStatus === "active";
+  return sanitizeJsonValue({
+    product_code: assignedProductCode,
+    slug: assignedSlug,
+    category: rowCategory,
+    subcategory: row.subcategory || `Selected ${rowCategory}`,
+    title_en: row.title_en || assignedProductCode,
+    description_en: row.description_en || "",
+    source_title_cn: row.source_title_cn || "",
+    source_description_cn: row.source_description_cn || "",
+    title_source_cn: row.title_source_cn || row.cleaned_source_title_cn || "",
+    description_source_cn: row.description_source_cn || row.cleaned_source_description_cn || "",
+    sizes_display: row.sizes_display || defaultSizes,
+    colors_display: row.colors_display || defaultColors,
+    moq: row.moq || "From 1 piece",
+    delivery_time: row.delivery_time || "7-12 business days",
+    main_image_url: publicUrls[0] || null,
+    main_thumbnail_url: thumbnailUrls[0] || publicUrls[0] || null,
+    gallery_image_urls: publicUrls,
+    gallery_thumbnail_urls: thumbnailUrls.length > 0 ? thumbnailUrls : publicUrls,
+    image_count: publicUrls.length,
+    source_url: row.source_url || "",
+    source_product_url: row.source_product_url || "",
+    source_album_url: row.source_album_url || row.source_url || "",
+    source_fingerprint: rowFingerprint || null,
+    import_batch_id: row.import_batch_id || importBatchId,
+    imported_at: row.imported_at || importedAt,
+    status: desiredStatus,
+    is_active: desiredIsActive,
+    is_featured: false,
+    notes: row.notes || "",
+  }) as Record<string, unknown>;
+}
+
+function validateProductPayload(product: Record<string, unknown>, row: ImportRow, expectedCategory: string): PayloadValidation {
+  const issues = collectJsonValueIssues(product);
+  const productCode = String(product.product_code || "");
+  const titleEn = String(product.title_en || "").trim();
+  const descriptionEn = String(product.description_en || "").trim();
+  const sourceTitleCn = String(product.source_title_cn || "");
+  const sourceDescriptionCn = String(product.source_description_cn || "");
+  const galleryImages = Array.isArray(product.gallery_image_urls) ? product.gallery_image_urls : [];
+  const galleryThumbnails = Array.isArray(product.gallery_thumbnail_urls) ? product.gallery_thumbnail_urls : [];
+
+  if (!productCode) issues.push("$.product_code: empty");
+  if (expectedCategory.toLowerCase() === "shoes" && !/^LM-SHO-\d+$/i.test(productCode)) {
+    issues.push("$.product_code: expected LM-SHO-number");
+  }
+  if (String(product.category || "") !== expectedCategory) issues.push("$.category: mismatch");
+  if (!titleEn) issues.push("$.title_en: empty");
+  if (!descriptionEn) issues.push("$.description_en: empty");
+  if (chineseTextRe.test(titleEn)) issues.push("$.title_en: contains Chinese");
+  if (chineseTextRe.test(descriptionEn)) issues.push("$.description_en: contains Chinese");
+  if (replacementCharRe.test(sourceTitleCn) || replacementCharRe.test(sourceDescriptionCn)) {
+    issues.push("$.source_title_cn/source_description_cn: contains replacement character");
+  }
+  if (sourceTitleCn.includes("出厂价") || sourceDescriptionCn.includes("出厂价")) {
+    issues.push("$.source_title_cn/source_description_cn: contains 出厂价");
+  }
+  if (row.product_code && row.product_code.includes("R08NPRF")) issues.push("input.product_code: contains R08NPRF");
+  if (galleryImages.length === 0) issues.push("$.gallery_image_urls: empty");
+  if (galleryThumbnails.length === 0) issues.push("$.gallery_thumbnail_urls: empty");
+
+  let body = "";
+  try {
+    body = JSON.stringify(product);
+    if (!body || body === "undefined") issues.push("JSON.stringify: empty body");
+    JSON.parse(body);
+  } catch (error) {
+    issues.push(`JSON body invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return {
+    ok: issues.length === 0,
+    product_code: productCode,
+    body_length: body.length,
+    issues,
+  };
 }
 
 function loadEnvLocal() {
@@ -472,7 +700,7 @@ async function main() {
   }
 
   let existingProducts: ExistingProduct[] = [];
-  if (supabaseUrl && serviceKey) {
+  if (!args.dryRun && supabaseUrl && serviceKey) {
     try {
       existingProducts = await fetchExistingProducts({ supabaseUrl, serviceKey, category });
     } catch (error) {
@@ -513,6 +741,13 @@ async function main() {
     product_codes_updated: [],
     products: [],
   };
+  const payloadDebugRows: Array<{
+    product_code: string;
+    action: "create" | "update";
+    validation: PayloadValidation;
+    payload: Record<string, unknown>;
+    json_body: string;
+  }> = [];
 
   for (const row of rows) {
     try {
@@ -528,8 +763,8 @@ async function main() {
       const existingByProductCode = row.product_code ? existingByCode.get(row.product_code) : undefined;
       const existingProduct = existingBySource || (!rowFingerprint ? existingByProductCode : undefined);
       const action: "create" | "update" = existingProduct ? "update" : "create";
-      const assignedProductCode = existingProduct?.product_code || nextProductCode(prefix, nextNumber++);
-      const assignedSlug = cleanSlug(assignedProductCode);
+      const assignedProductCode = existingProduct?.product_code || row.product_code || nextProductCode(prefix, nextNumber++);
+      const assignedSlug = row.slug || cleanSlug(assignedProductCode);
 
       const imagePaths = localImagePaths(row, importDir);
       const thumbnailPaths = localThumbnailPaths(row, importDir);
@@ -547,12 +782,8 @@ async function main() {
       const thumbnailUrls: string[] = [];
 
       if (args.dryRun) {
-        for (const filePath of imagePaths) {
-          publicUrls.push(`${bucketName}/${storageFolder}/display/${path.basename(filePath)}`);
-        }
-        for (const filePath of thumbnailPaths) {
-          thumbnailUrls.push(`${bucketName}/${storageFolder}/thumbs/${path.basename(filePath)}`);
-        }
+        publicUrls.push(...plannedPublicUrls(imagePaths, storageFolder, "display", supabaseUrl));
+        thumbnailUrls.push(...plannedPublicUrls(thumbnailPaths, storageFolder, "thumbs", supabaseUrl));
       } else {
         const uploadedDisplays = await mapWithConcurrency(
           imagePaths,
@@ -588,37 +819,31 @@ async function main() {
         thumbnailUrls.push(...uploadedThumbnails);
       }
 
-      const productPayload = {
-        product_code: assignedProductCode,
-        slug: assignedSlug,
-        category: rowCategory,
-        subcategory: row.subcategory || "Selected Apparel",
-        title_en: row.title_en || assignedProductCode,
-        description_en: row.description_en || "",
-        source_title_cn: row.source_title_cn || "",
-        source_description_cn: row.source_description_cn || "",
-        title_source_cn: row.title_source_cn || row.cleaned_source_title_cn || "",
-        description_source_cn: row.description_source_cn || row.cleaned_source_description_cn || "",
-        sizes_display: row.sizes_display || defaultSizes,
-        colors_display: row.colors_display || defaultColors,
-        moq: row.moq || "From 1 piece",
-        delivery_time: row.delivery_time || "7-12 business days",
-        main_image_url: publicUrls[0] || null,
-        main_thumbnail_url: thumbnailUrls[0] || publicUrls[0] || null,
-        gallery_image_urls: publicUrls,
-        gallery_thumbnail_urls: thumbnailUrls.length > 0 ? thumbnailUrls : publicUrls,
-        image_count: publicUrls.length,
-        source_url: row.source_url || "",
-        source_product_url: row.source_product_url || "",
-        source_album_url: row.source_album_url || row.source_url || "",
-        source_fingerprint: rowFingerprint || null,
-        import_batch_id: row.import_batch_id || importBatchId,
-        imported_at: row.imported_at || importedAt,
-        status: args.publish ? "published" : "draft",
-        is_active: args.publish,
-        is_featured: false,
-        notes: row.notes || "",
-      };
+      const productPayload = buildProductPayload({
+        row,
+        rowCategory,
+        assignedProductCode,
+        assignedSlug,
+        publicUrls,
+        thumbnailUrls,
+        rowFingerprint,
+        importBatchId,
+        importedAt,
+        publish: args.publish,
+      });
+      const validation = validateProductPayload(productPayload, row, rowCategory);
+      if (args.debugCodes.includes(assignedProductCode)) {
+        payloadDebugRows.push({
+          product_code: assignedProductCode,
+          action,
+          validation,
+          payload: productPayload,
+          json_body: JSON.stringify(productPayload),
+        });
+      }
+      if (!validation.ok) {
+        throw new Error(`Invalid Supabase payload: ${validation.issues.join("; ")}`);
+      }
 
       if (!args.dryRun) {
         if (action === "update") {
@@ -652,20 +877,50 @@ async function main() {
         console.log(`Imported products ${report.total_products_imported}/${rows.length}`);
       }
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
       report.failed_uploads += 1;
       report.failed_products.push({
         product_code: row.product_code,
-        reason: error instanceof Error ? error.message : String(error),
+        reason,
       });
+      console.error(`FAILED product ${row.product_code || "(no code)"}: ${reason}`);
+      try {
+        const liveReportPath = path.join(importDir, "import-to-supabase-report.json");
+        writeFileSync(liveReportPath, `${JSON.stringify(report, null, 2)}\\n`);
+      } catch {}
     }
+  }
+
+  if (args.debugPayloadOnly || payloadDebugRows.length > 0) {
+    const debugSuffix = args.debugCodes.length > 0 ? args.debugCodes.join("-") : "payloads";
+    const debugPath = path.join(importDir, `debug-supabase-payloads-${debugSuffix}.json`);
+    writeFileSync(debugPath, `${JSON.stringify({
+      input: inputPath,
+      category,
+      debug_codes: args.debugCodes,
+      payloads: payloadDebugRows,
+    }, null, 2)}\n`);
+    console.log(`Debug payloads: ${debugPath}`);
   }
 
   const reportPath = path.join(importDir, "import-to-supabase-report.json");
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  const importedCodes = report.product_codes_imported;
+  const lmShoCodes = importedCodes.filter((code) => /^LM-SHO-\d+$/i.test(code)).length;
+  const lmAppCodes = importedCodes.filter((code) => /^LM-APP/i.test(code)).length;
+  const lmBagCodes = importedCodes.filter((code) => /^LM-BAG/i.test(code)).length;
+  const r08Codes = importedCodes.filter((code) => /R08NPRF/i.test(code)).length;
 
   console.log("");
   console.log(`Products read: ${report.total_products_read}`);
   console.log(`Products ${args.dryRun ? "checked" : "imported"}: ${report.total_products_imported}`);
+  console.log(`Product codes checked: ${importedCodes.length}`);
+  console.log(`LM-SHO-number codes: ${lmShoCodes}`);
+  console.log(`LM-APP codes: ${lmAppCodes}`);
+  console.log(`LM-BAG codes: ${lmBagCodes}`);
+  console.log(`R08NPRF codes: ${r08Codes}`);
+  console.log(`Skipped products: ${report.skipped_products.length}`);
+  console.log(`Failed products: ${report.failed_products.length}`);
   console.log(`Images ${args.dryRun ? "found" : "uploaded"}: ${args.dryRun ? report.products.reduce((sum, item) => sum + item.image_count, 0) : report.total_images_uploaded}`);
   console.log(`Report: ${reportPath}`);
 

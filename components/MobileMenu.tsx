@@ -1,60 +1,47 @@
-"use client";
+import Link from 'next/link';
 
-import Link from "next/link";
+const NAV_LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/catalog', label: 'Catalog' },
+  { href: '/new-arrivals', label: 'New Arrivals' },
+  { href: '/track-order', label: 'Track Order' },
+  { href: '/shipping-proof', label: 'Shipping Proof' },
+  { href: '/wholesale-guide', label: 'Retail & Wholesale Guide' },
+  { href: '/contact', label: 'Contact' },
+];
 
-export default function MobileMenu({ telegramHref = "/contact" }: { telegramHref?: string }) {
-  const closeMenu = () => {
-    const toggle = document.getElementById("lm-mobile-menu-toggle") as HTMLInputElement | null;
-    if (toggle) toggle.checked = false;
-  };
-
-  const links = [
-    { label: "Home", href: "/" },
-    { label: "Catalog", href: "/catalog" },
-    { label: "New Arrivals", href: "/new-arrivals" },
-    { label: "Factory Direct", href: "/#factory-direct" },
-    { label: "Shipping Proof", href: "/shipping-proof" },
-    { label: "Retail & Wholesale Guide", href: "/wholesale-guide" },
-    { label: "Contact", href: "/contact" },
-  ];
-
+export default function MobileMenu({ telegramHref = '/contact' }: { telegramHref?: string }) {
   return (
-    <div className="relative md:hidden">
-      <input id="lm-mobile-menu-toggle" type="checkbox" className="peer sr-only" />
-
-      <label
-        htmlFor="lm-mobile-menu-toggle"
-        aria-label="Toggle mobile menu"
-        className="flex h-12 w-12 cursor-pointer select-none items-center justify-center rounded-xl border border-[#E8E2D4] bg-white text-3xl leading-none text-[#111111] shadow-sm"
+    <details className="relative z-[100] md:hidden">
+      <summary
+        aria-label="Open navigation menu"
+        className="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-2xl border border-neutral-200 bg-white text-2xl font-semibold text-neutral-900 shadow-sm active:scale-[0.98] [&::-webkit-details-marker]:hidden"
       >
-        ☰
-      </label>
+        <span aria-hidden="true">☰</span>
+      </summary>
 
-      <div
-        id="mobile-menu-panel"
-        className="fixed left-0 right-0 top-[73px] z-[9999] hidden border-t border-[#E8E2D4] bg-white px-8 py-7 shadow-xl peer-checked:block"
+      <nav
+        aria-label="Mobile navigation"
+        className="absolute right-0 top-full z-[120] mt-3 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-neutral-200 bg-white p-2 shadow-2xl"
       >
-        <nav className="mx-auto flex max-w-md flex-col gap-7">
-          {links.map((link) => (
+        <div className="flex flex-col">
+          {NAV_LINKS.map((item) => (
             <Link
-              key={link.href}
-              href={link.href}
-              onClick={closeMenu}
-              className="text-[22px] font-medium leading-none text-[#111111]"
+              key={item.href}
+              href={item.href}
+              className="rounded-2xl px-4 py-4 text-base font-semibold text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200"
             >
-              {link.label}
+              {item.label}
             </Link>
           ))}
-
           <Link
             href={telegramHref}
-            onClick={closeMenu}
-            className="mt-2 rounded-full bg-[#111111] px-5 py-4 text-center text-[20px] font-semibold text-white"
+            className="mt-1 rounded-2xl bg-neutral-900 px-4 py-4 text-center text-base font-semibold text-white active:bg-neutral-800"
           >
             Join Telegram Group
           </Link>
-        </nav>
-      </div>
-    </div>
+        </div>
+      </nav>
+    </details>
   );
 }

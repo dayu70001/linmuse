@@ -9,7 +9,7 @@ export async function Header() {
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel || "/contact";
 
   return (
-    <header className="sticky top-0 z-[9000] border-b border-[#E8E2D4] bg-white">
+    <header className="sticky top-0 z-[80] border-b border-[#E8E2D4] bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-8 lg:px-10">
         <Link href="/" className="font-serif text-xl font-semibold text-ink sm:text-2xl">
           {siteConfig.brandName}
@@ -25,6 +25,9 @@ export async function Header() {
               {item.label}
             </Link>
           ))}
+          <Link className="text-sm font-semibold text-muted transition hover:text-gold" href="/track-order">
+            Track Order
+          </Link>
         </nav>
 
         <Link className="btn-primary hidden md:inline-flex" href={telegram}>

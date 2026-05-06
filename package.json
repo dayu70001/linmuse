@@ -9,23 +9,26 @@
     "lint": "next lint",
     "import:wecatalog": "node --experimental-strip-types scripts/import-wecatalog.ts",
     "import:wecatalog:full": "node --experimental-strip-types scripts/import-wecatalog-full.ts",
+    "discover:gxhy1688": "node --experimental-strip-types scripts/discover-gxhy1688.ts",
+    "import:gxhy1688": "node --experimental-strip-types scripts/import-gxhy1688.ts",
     "translate:products": "node --experimental-strip-types scripts/translate-products.ts",
     "import:products:supabase": "node --experimental-strip-types scripts/import-products-to-supabase.ts"
   },
   "dependencies": {
+    "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
     "playwright": "^1.57.0",
+    "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "latest"
   }
 }

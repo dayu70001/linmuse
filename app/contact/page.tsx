@@ -1,5 +1,6 @@
-import { Mail, Send, Share2, Users } from "lucide-react";
+import { Mail, PackageSearch, Send, Share2, Users } from "lucide-react";
 import Link from "next/link";
+import { SafeEmailLink } from "@/components/SafeEmailLink";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { getSetting, getSiteSettings } from "@/lib/siteData";
@@ -11,6 +12,8 @@ export default async function ContactPage() {
   const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
   const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
   const email = getSetting(settings, "email") || siteConfig.email;
+  const [emailUser, ...emailDomainParts] = email.split("@");
+  const emailDomain = emailDomainParts.join(".").replace(/^\./, "") || "gmail.com";
   const cards = [
     {
       title: "Telegram Group",
@@ -70,11 +73,18 @@ export default async function ContactPage() {
                 <Link href={whatsappGroup || "/contact"}>WhatsApp Group</Link>
                 <Link href={instagram || "/contact"}>Instagram</Link>
                 <Link href={facebook || "/contact"}>Facebook</Link>
-                <Link href={`mailto:${email}`}>
+                <SafeEmailLink user={emailUser} domain={emailDomain}>
                   <Mail className="mr-2 inline text-gold" size={16} />
-                  {email}
-                </Link>
+                  Email us
+                </SafeEmailLink>
               </div>
+              <Link
+                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold"
+                href="/track-order"
+              >
+                <PackageSearch size={17} />
+                Already ordered? Track your shipment
+              </Link>
             </div>
             <div className="card bg-paper p-6">
               <h2 className="font-serif text-2xl text-ink">Catalog notes</h2>

@@ -37,6 +37,9 @@ type CliOptions = {
   max: number;
   limitNew: number | null;
   maxScan: number;
+  skipFirstCandidates: number;
+  minProductImages: number;
+  imageLimit: number;
   skipExisting: boolean;
   importBatchId: string;
   importedAt: string;
@@ -49,6 +52,8 @@ type Candidate = {
   title: string;
   imageUrls: string[];
   clickIndex: number;
+  source_order: number;
+  candidate_index: number;
 };
 
 type ImageCandidate = {
@@ -76,10 +81,13 @@ type ClickResult = {
   urlAfter: string;
   detailContainerFound: boolean;
   strategy: string;
+  wholeStorePageDetected: boolean;
 };
 
 type ProductExport = {
   product_code: string;
+  source_order: number;
+  candidate_index: number;
   slug: string;
   category: string;
   subcategory: string;
@@ -130,6 +138,8 @@ type ProductLikeArray = {
 
 type ApiProductCandidate = {
   index: number;
+  source_order: number;
+  candidate_index: number;
   id: string;
   title_cn: string;
   description_cn: string;
@@ -209,6 +219,8 @@ const MAX_PRODUCT_IMAGES = 9;
 
 const csvColumns: Array<keyof ProductExport> = [
   "product_code",
+  "source_order",
+  "candidate_index",
   "slug",
   "category",
   "subcategory",
@@ -256,6 +268,9 @@ function parseArgs(): CliOptions {
   const targetMax = limitNew || Math.max(1, Math.min(Number.isFinite(requestedMax) ? requestedMax : 10, 20));
   const requestedMaxScan = Number(getValue("--max-scan") || Math.max(targetMax * 5, targetMax * 2));
   const importedAt = new Date().toISOString();
+  const skipFirstCandidates = Math.max(0, Number(getValue("--skip-first-candidates") || getValue("--skip-first") || 0) || 0);
+  const minProductImages = Math.max(1, Number(getValue("--min-product-images") || 9) || 9);
+  const imageLimit = Math.max(1, Number(getValue("--image-limit") || 9) || 9);
   const translator = getValue("--translator") || "none";
   if (!["none", "deepseek"].includes(translator)) {
     throw new Error('--translator must be "none" or "deepseek"');
@@ -266,6 +281,9 @@ function parseArgs(): CliOptions {
     max: targetMax,
     limitNew,
     maxScan: Math.max(targetMax, Number.isFinite(requestedMaxScan) ? requestedMaxScan : targetMax * 5),
+    skipFirstCandidates,
+    minProductImages,
+    imageLimit,
     skipExisting: args.includes("--skip-existing"),
     importBatchId: `${(getValue("--category") || "Apparel").toLowerCase()}-${batchTimestamp(importedAt)}`,
     importedAt,
@@ -296,6 +314,18 @@ function importsRoot() {
 
 function importHistoryPath() {
   return path.join(importsRoot(), "import-history.json");
+}
+
+function categoryPrefix(category: string) {
+  const normalized = category.toLowerCase();
+  if (normalized === "shoes") return "LM-SHO";
+  if (normalized === "watches") return "LM-WAT";
+  if (normalized === "bags") return "LM-BAG";
+  return "LM-APP";
+}
+
+function productCodeFor(category: string, sequence: number) {
+  return `${categoryPrefix(category)}-${String(sequence).padStart(4, "0")}`;
 }
 
 function loadEnvLocal() {
@@ -359,8 +389,16 @@ function isGlobalDescription(text: string) {
 
 function isProbablyImageUrl(value: string) {
   if (!/^https?:\/\//i.test(value)) return false;
-  if (/album_bg|\/album_bg|minicode|minicode_long|\/minicode_long\/|\/album\/personal\/|template|template_pubu|avatar|logo|qrcode|qr|wechat|cover|banner|background|icon|shop|store|profile|watermark/i.test(value)) return false;
+  if (isVideoUrl(value) || isNonProductMediaUrl(value)) return false;
   return /\.(jpe?g|png|webp|avif)(\?|$)/i.test(value) || /image|img|pic|photo|album|goods|product/i.test(value);
+}
+
+function isVideoUrl(value: string) {
+  return /\.(mp4|mov|webm|m3u8)(?:$|[?#])/i.test(value) || /\/video\/|video|m3u8/i.test(value);
+}
+
+function isNonProductMediaUrl(value: string) {
+  return /album_bg|\/album_bg|minicode|minicode_long|\/minicode_long\/|\/album\/personal\/|template|template_pubu|avatar|logo|qrcode|qr|wechat|cover|banner|background|icon|shop|store|profile|watermark|poster|og:image|og_image|share|header|store_header|shop_header|headimg/i.test(value);
 }
 
 function hasTemplateImageUrl(urls: string[]) {
@@ -411,7 +449,7 @@ function hasLowResolutionImageModifier(rawUrl: string) {
 
 function isRejectedProductImageUrl(rawUrl: string) {
   const lower = rawUrl.toLowerCase();
-  return /album_bg|\/album_bg|minicode|minicode_long|\/minicode_long\/|qrcode|qr|avatar|logo|banner|background|cover|icon|profile|template|template_pubu|\/album\/personal\//.test(lower) || hasLowResolutionImageModifier(lower);
+  return isVideoUrl(lower) || isNonProductMediaUrl(lower) || hasLowResolutionImageModifier(lower);
 }
 
 function productImageGroupKey(rawUrl: string) {
@@ -429,7 +467,7 @@ function productImageGroupKey(rawUrl: string) {
   }
 }
 
-function selectDominantProductImages(imageUrls: string[]) {
+function selectDominantProductImages(imageUrls: string[], imageLimit = MAX_PRODUCT_IMAGES) {
   const rejected: Array<{ url: string; reason: string }> = [];
   const seen = new Set<string>();
   const groups = new Map<string, Array<{ discoveredUrl: string; downloadUrl: string }>>();
@@ -438,6 +476,10 @@ function selectDominantProductImages(imageUrls: string[]) {
     const exact = imageUrl.trim();
     const normalized = normalizeProductDownloadUrl(exact);
     if (!exact) continue;
+    if (!/^https?:\/\//i.test(exact) || isVideoUrl(exact)) {
+      rejected.push({ url: imageUrl, reason: "video or non-http media url" });
+      continue;
+    }
     if (seen.has(exact) || seen.has(normalized)) {
       rejected.push({ url: imageUrl, reason: "duplicate image url" });
       continue;
@@ -464,8 +506,8 @@ function selectDominantProductImages(imageUrls: string[]) {
 
   return {
     selectedGroup: selected?.group || "",
-    selectedImages: selected?.images || [],
-    selectedUrls: selected?.images.map((image) => image.downloadUrl) || [],
+    selectedImages: (selected?.images || []).slice(0, imageLimit),
+    selectedUrls: (selected?.images || []).slice(0, imageLimit).map((image) => image.downloadUrl),
     groups: sortedGroups.map((group) => ({ group: group.group, count: group.count })),
     rejectedGroups,
     rejectedUrls: rejected,
@@ -991,6 +1033,8 @@ function findProductCandidatesFromNetwork(records: NetworkResponseRecord[], stor
         seen.add(key);
         candidates.push({
           index: candidates.length + 1,
+          source_order: candidates.length + 1,
+          candidate_index: candidates.length + 1,
           id,
           title_cn: title,
           description_cn: description,
@@ -1065,7 +1109,7 @@ async function collectCandidates(page: Page, sourceUrl: string, max: number): Pr
           img.id || "",
           img.closest("[class]") ? img.closest("[class]").className : "",
         ].join(" ").toLowerCase();
-        const badAssetWords = ["album_bg", "/album_bg", "minicode", "minicode_long", "/minicode_long/", "avatar", "logo", "qrcode", "qr", "wechat", "cover", "banner", "background", "bg", "icon", "shop", "store", "profile", "watermark"];
+        const badAssetWords = ["album_bg", "/album_bg", "minicode", "minicode_long", "/minicode_long/", "avatar", "logo", "qrcode", "qr", "wechat", "cover", "banner", "background", "bg", "icon", "shop", "store", "profile", "watermark", "video", "poster", "share", "header"];
         if (badAssetWords.some((word) => meta.includes(word))) return false;
         const rect = img.getBoundingClientRect();
         const width = img.naturalWidth || rect.width || 0;
@@ -1079,6 +1123,10 @@ async function collectCandidates(page: Page, sourceUrl: string, max: number): Pr
           .map((img) => absolute(img.currentSrc || img.getAttribute("src") || img.getAttribute("data-src") || img.getAttribute("data-original") || ""))
           .filter(Boolean);
         return Array.from(new Set(imageUrls));
+      };
+      const hrefOf = (element) => {
+        const hrefEl = element.matches("a[href]") ? element : element.querySelector("a[href]");
+        return absolute(hrefEl ? hrefEl.getAttribute("href") || hrefEl.href || "" : "");
       };
 
       const clickableSelectors = "a[href], [onclick], [role=button], li, article, .goods, .product, .item, .card, .album, .pic";
@@ -1095,15 +1143,16 @@ async function collectCandidates(page: Page, sourceUrl: string, max: number): Pr
             imageUrls.join(" ")
           ].join(" ").toLowerCase();
           if (top < 180) return false;
-          if (/瀑布流|商城单图列表|模板|我的店铺|店铺已全新装修|就差你的光顾|光顾啦|欢迎光临|全新装修|template|layout|navigation|style|theme|banner|cover|avatar|logo|profile/.test(meta)) return false;
+          if (/瀑布流|商城单图列表|模板|我的店铺|店铺已全新装修|就差你的光顾|光顾啦|欢迎光临|全新装修|联系ta|联系TA|全部上新|店铺|客服|购物车|template|layout|navigation|style|theme|banner|cover|avatar|logo|profile/.test(meta)) return false;
           return rect.width >= 110 && rect.height >= 110 && imageUrls.length > 0 && text.length > 2;
         });
 
       const anchorCards = clickableCards
-        .map((anchor, index) => {
-          const href = absolute(anchor.getAttribute("href"));
-          const imageUrls = imagesOf(anchor);
-          const title = textOf(anchor);
+        .map((card, index) => {
+          card.setAttribute("data-lm-candidate-index", String(index));
+          const href = hrefOf(card);
+          const imageUrls = imagesOf(card);
+          const title = textOf(card);
           return { url: href, title, imageUrls, clickIndex: index };
         })
         .filter((item) => item.imageUrls.length > 0 || item.title.length > 3);
@@ -1117,6 +1166,7 @@ async function collectCandidates(page: Page, sourceUrl: string, max: number): Pr
         .map((img, index) => {
           const src = absolute(img.currentSrc || img.getAttribute("src") || img.getAttribute("data-src") || img.getAttribute("data-original") || "");
           const parent = img.closest("li, article, div") || img;
+          parent.setAttribute("data-lm-candidate-index", String(index));
           return { url: baseUrl + "#image-" + index, title: textOf(parent), imageUrls: src ? [src] : [], clickIndex: index };
         })
         .filter((item) => item.imageUrls.length > 0);
@@ -1134,6 +1184,8 @@ async function collectCandidates(page: Page, sourceUrl: string, max: number): Pr
       title: cleanText(candidate.title).slice(0, 180),
       imageUrls: unique(candidate.imageUrls.map((url) => normalizeUrl(url, sourceUrl)).filter(Boolean)),
       clickIndex: candidate.clickIndex,
+      source_order: filtered.length + 1,
+      candidate_index: filtered.length + 1,
     });
     if (filtered.length >= max) break;
   }
@@ -1210,52 +1262,78 @@ async function detectDetailState(page: Page) {
 
 async function clickCandidateForDetail(page: Page, candidate: Candidate): Promise<ClickResult> {
   const urlBefore = page.url();
-  const clickInfo = await page.evaluate(`
-    (() => {
-      const index = ${JSON.stringify(candidate.clickIndex)};
-      const selector = "a[href], [onclick], [role=button], li, article, .goods, .product, .item, .card, .album, .pic";
-      const textOf = (element) => (element.textContent || "").replace(/\\s+/g, " ").trim();
-      const imageCountOf = (element) => element.querySelectorAll("img").length;
-      const cards = Array.from(document.querySelectorAll(selector)).filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.width >= 80 && rect.height >= 80 && (imageCountOf(element) > 0 || textOf(element).length > 3);
-      });
-      const card = cards[index] || cards.find((element) => textOf(element).includes(${JSON.stringify(candidate.title.slice(0, 24))}));
-      if (!card) return { found: false, x: 0, y: 0, href: "" };
-      card.scrollIntoView({ block: "center", inline: "center" });
-      const rect = card.getBoundingClientRect();
-      const hrefEl = card.matches("a[href]") ? card : card.querySelector("a[href]");
-      return {
-        found: true,
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-        href: hrefEl ? hrefEl.href : ""
-      };
-    })()
-  `) as { found: boolean; x: number; y: number; href: string };
-
   let strategy = "center coordinate click";
-  if (clickInfo.found) {
-    await page.mouse.click(clickInfo.x, clickInfo.y);
-    await page.waitForTimeout(1800);
-  } else if (candidate.url && !candidate.url.includes("#image-")) {
+  if (candidate.url && !candidate.url.includes("#image-") && candidate.url !== urlBefore) {
     strategy = "open href directly";
     await page.goto(candidate.url, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForTimeout(1800);
   } else {
-    strategy = "no clickable card found";
+    const clickInfo = await page.evaluate(`
+      (() => {
+        const index = ${JSON.stringify(candidate.clickIndex)};
+        const titleNeedle = ${JSON.stringify(candidate.title.slice(0, 24))};
+        const selector = "a[href], [onclick], [role=button], li, article, .goods, .product, .item, .card, .album, .pic";
+        const textOf = (element) => (element.textContent || "").replace(/\\s+/g, " ").trim();
+        const imageCountOf = (element) => element.querySelectorAll("img").length;
+        const isStoreShell = (element) => {
+          const text = textOf(element);
+          const meta = [
+            element.className || "",
+            element.id || "",
+            text
+          ].join(" ").toLowerCase();
+          return /瀑布流|商城单图列表|模板|我的店铺|店铺已全新装修|就差你的光顾|光顾啦|欢迎光临|全新装修|联系ta|联系TA|全部上新|店铺|客服|购物车|template|layout|navigation|style|theme|banner|cover|avatar|logo|profile/.test(meta);
+        };
+        const markedCard = document.querySelector('[data-lm-candidate-index="' + index + '"]');
+        const cards = Array.from(document.querySelectorAll(selector)).filter((element) => {
+          const rect = element.getBoundingClientRect();
+          const top = rect.top + window.scrollY;
+          return top >= 180 &&
+            rect.width >= 80 &&
+            rect.height >= 80 &&
+            (imageCountOf(element) > 0 || textOf(element).length > 3) &&
+            !isStoreShell(element);
+        });
+        const card = markedCard || cards[index] || cards.find((element) => titleNeedle && textOf(element).includes(titleNeedle));
+        if (!card) return { found: false, x: 0, y: 0, href: "", marked: false };
+        card.scrollIntoView({ block: "center", inline: "center" });
+        const rect = card.getBoundingClientRect();
+        const hrefEl = card.matches("a[href]") ? card : card.querySelector("a[href]");
+        return {
+          found: true,
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+          href: hrefEl ? hrefEl.href : "",
+          marked: Boolean(markedCard)
+        };
+      })()
+    `) as { found: boolean; x: number; y: number; href: string; marked: boolean };
+
+    if (clickInfo.href && clickInfo.href !== urlBefore) {
+      strategy = clickInfo.marked ? "open marked card href directly" : "open matched card href directly";
+      await page.goto(clickInfo.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+      await page.waitForTimeout(1800);
+    } else if (clickInfo.found) {
+      strategy = clickInfo.marked ? "click marked product card" : "center coordinate click";
+      await page.mouse.click(clickInfo.x, clickInfo.y);
+      await page.waitForTimeout(1800);
+    } else {
+      strategy = "no clickable card found";
+    }
   }
 
   await collectCarouselImages(page);
   const state = await detectDetailState(page);
   const urlAfter = page.url();
-  const opened = urlAfter !== urlBefore || state.modalFound || state.detailContainerFound;
+  const wholeStorePageDetected = urlAfter === urlBefore && !state.modalFound;
+  const opened = !wholeStorePageDetected && (urlAfter !== urlBefore || state.modalFound || state.detailContainerFound);
   return {
     opened,
     urlBefore,
     urlAfter,
     detailContainerFound: state.detailContainerFound || state.modalFound,
     strategy,
+    wholeStorePageDetected,
   };
 }
 
@@ -1472,6 +1550,8 @@ async function exportDetailProduct({
   storeTitle,
   sourceUrl,
   sourceFingerprintValue,
+  sourceOrder,
+  candidateIndex,
   clickResult,
 }: {
   product: DetailExtraction;
@@ -1482,6 +1562,8 @@ async function exportDetailProduct({
   storeTitle: string;
   sourceUrl: string;
   sourceFingerprintValue: string;
+  sourceOrder: number;
+  candidateIndex: number;
   clickResult?: ClickResult;
 }) {
   const sourceTitle = cleanText(product.title);
@@ -1491,12 +1573,12 @@ async function exportDetailProduct({
   const translationSource = cleanText(`${cleanedTitle} ${cleanedDescription || cleanedTitle}`);
   const isDomSource = product.source === "dom_detail" || product.source === "listing_fallback";
 
-  if (clickResult && (clickResult.strategy === "no clickable card found" || (!clickResult.opened && !clickResult.detailContainerFound))) {
+  if (clickResult && (clickResult.wholeStorePageDetected || clickResult.strategy === "no clickable card found" || (!clickResult.opened && !clickResult.detailContainerFound))) {
     return {
       row: null,
       downloaded: 0,
       riskyTerms: [] as string[],
-      reason: "Product detail was not opened. Whole store page was detected instead.",
+      reason: "whole_store_page_detected",
     };
   }
   if (isLikelyStoreTitle(sourceTitle, storeTitle)) {
@@ -1504,7 +1586,7 @@ async function exportDetailProduct({
       row: null,
       downloaded: 0,
       riskyTerms: [] as string[],
-      reason: "Store title was captured instead of product title.",
+      reason: "whole_store_page_detected",
     };
   }
   if (!hasProductLikeTitle(sourceTitle)) {
@@ -1536,7 +1618,7 @@ async function exportDetailProduct({
       row: null,
       downloaded: 0,
       riskyTerms: [] as string[],
-      reason: "Global store description was captured instead of product description.",
+      reason: "whole_store_page_detected",
     };
   }
   if (isDomSource && product.imageCandidates.length >= 100) {
@@ -1544,7 +1626,23 @@ async function exportDetailProduct({
       row: null,
       downloaded: 0,
       riskyTerms: [] as string[],
-      reason: "Whole store page image set was detected instead of one product gallery.",
+      reason: "whole_store_page_detected",
+    };
+  }
+
+  const imageSelection = selectDominantProductImages(product.imageUrls, options.imageLimit);
+  const realProductImages = imageSelection.selectedImages;
+  if (realProductImages.length < options.minProductImages) {
+    const reason = realProductImages.length === 0 && imageSelection.rejectedUrls.length > 0
+      ? "video_or_non_product_media"
+      : "fewer_than_9_product_images";
+    return {
+      row: null,
+      downloaded: 0,
+      riskyTerms: [] as string[],
+      reason,
+      realImages: realProductImages.length,
+      rejectedMedia: imageSelection.rejectedUrls.length,
     };
   }
 
@@ -1560,7 +1658,6 @@ async function exportDetailProduct({
   const savedThumbnails: string[] = [];
   const imageErrors: string[] = [];
   const seenImageHashes = new Set<string>();
-  const imageSelection = selectDominantProductImages(product.imageUrls);
   if (options.debug) {
     console.log(JSON.stringify({
       product_code: productCode,
@@ -1570,8 +1667,8 @@ async function exportDetailProduct({
       rejected_image_urls: imageSelection.rejectedUrls.slice(0, 12),
     }, null, 2));
   }
-  for (const imageCandidate of imageSelection.selectedImages) {
-    if (savedImages.length >= MAX_PRODUCT_IMAGES) break;
+  for (const imageCandidate of realProductImages) {
+    if (savedImages.length >= options.imageLimit) break;
     const imageUrl = imageCandidate.downloadUrl;
     try {
       const image = await downloadImage(imageUrl, product.url || sourceUrl);
@@ -1626,6 +1723,17 @@ async function exportDetailProduct({
     }
   }
 
+  if (savedImages.length < options.minProductImages) {
+    return {
+      row: null,
+      downloaded: savedImages.length,
+      riskyTerms: [] as string[],
+      reason: "fewer_than_9_product_images",
+      realImages: savedImages.length,
+      rejectedMedia: imageSelection.rejectedUrls.length,
+    };
+  }
+
   const terms = detectRiskyTerms(sourceTitle, sourceDescription);
   const highQualityRemoved = /高品质/.test(`${sourceTitle} ${sourceDescription}`);
   const subcategory = inferSubcategory(translationSource);
@@ -1649,6 +1757,8 @@ async function exportDetailProduct({
   return {
     row: {
       product_code: productCode,
+      source_order: sourceOrder,
+      candidate_index: candidateIndex,
       slug: productCode.toLowerCase(),
       category: options.category,
       subcategory,
@@ -1698,10 +1808,16 @@ async function main() {
 
   let browser: Browser | undefined;
   const failedProducts: Array<{ product_code?: string; source_product_url?: string; reason: string }> = [];
+  const skippedProducts: Array<{ product_code?: string; source_product_url?: string; title?: string; reason: string; real_images?: number; candidate_index?: number; source_order?: number }> = [];
   const exported: ProductExport[] = [];
   const riskyTermsFound: string[] = [];
   let totalImagesDownloaded = 0;
   let totalProductsFound = 0;
+  let totalCandidatesBeforeSkip = 0;
+  let totalCandidatesAfterSkip = 0;
+  let scannedCount = 0;
+  let skippedFewerThan9ImagesCount = 0;
+  let skippedVideoOrNonProductMediaCount = 0;
   let skippedExisting = 0;
   const existingFingerprints = options.skipExisting
     ? new Set([...(await loadLocalHistory()), ...(await fetchSupabaseFingerprints())])
@@ -1786,26 +1902,24 @@ async function main() {
     }
     const candidates = await collectCandidates(page, options.url, options.maxScan);
     totalProductsFound = candidates.length;
+    const orderedNetworkCandidates = [...networkDiscovery.candidates].sort((a, b) => a.source_order - b.source_order);
+    const orderedDomCandidates = [...candidates].sort((a, b) => a.source_order - b.source_order);
+    const networkCandidatesToScan = orderedNetworkCandidates.slice(options.skipFirstCandidates);
+    const domCandidatesToScan = orderedDomCandidates.slice(options.skipFirstCandidates);
+    totalCandidatesBeforeSkip = orderedNetworkCandidates.length + orderedDomCandidates.length;
+    totalCandidatesAfterSkip = networkCandidatesToScan.length + domCandidatesToScan.length;
 
-    const seenHashes = new Set<string>();
-    const seenTitles = new Set<string>();
     let attemptSequence = 1;
-    for (const apiCandidate of networkDiscovery.candidates) {
+    for (const apiCandidate of networkCandidatesToScan) {
       if (exported.length >= options.max) break;
+      scannedCount += 1;
       const detail = detailFromApiCandidate(apiCandidate, options.url);
       const fingerprintInfo = fingerprintForProduct(detail, options.url);
       if (options.skipExisting && existingFingerprints.has(fingerprintInfo.fingerprint)) {
         skippedExisting += 1;
         continue;
       }
-      const titleKey = productTitleDedupKey(detail.title);
-      if (seenTitles.has(titleKey)) continue;
-      const identity = crypto
-        .createHash("sha1")
-        .update(productDedupKey(detail.title, detail.imageUrls))
-        .digest("hex");
-      if (seenHashes.has(identity)) continue;
-      const productCode = `LM-APP-${String(exported.length + 1).padStart(4, "0")}`;
+      const productCode = productCodeFor(options.category, exported.length + 1);
       const saved = await exportDetailProduct({
         product: detail,
         productCode,
@@ -1815,21 +1929,35 @@ async function main() {
         storeTitle,
         sourceUrl: options.url,
         sourceFingerprintValue: fingerprintInfo.fingerprint,
+        sourceOrder: apiCandidate.source_order,
+        candidateIndex: apiCandidate.candidate_index,
       });
       if (!saved.row) {
+        const meta = saved as typeof saved & { realImages?: number; rejectedMedia?: number };
+        if (saved.reason === "fewer_than_9_product_images") skippedFewerThan9ImagesCount += 1;
+        if (saved.reason === "video_or_non_product_media" || (meta.rejectedMedia || 0) > 0) skippedVideoOrNonProductMediaCount += 1;
+        skippedProducts.push({
+          product_code: productCode,
+          source_product_url: detail.url,
+          title: detail.title,
+          reason: saved.reason,
+          real_images: meta.realImages || 0,
+          candidate_index: apiCandidate.candidate_index,
+          source_order: apiCandidate.source_order,
+        });
         failedProducts.push({
           product_code: productCode,
           source_product_url: detail.url,
           reason: saved.reason,
         });
+        console.log(`[${scannedCount}/${totalCandidatesAfterSkip}] SKIP reason=${saved.reason} real_images=${meta.realImages || 0} title=${cleanText(detail.title).slice(0, 80)}`);
         continue;
       }
-      seenHashes.add(identity);
-      seenTitles.add(titleKey);
       existingFingerprints.add(fingerprintInfo.fingerprint);
       exported.push(saved.row);
       totalImagesDownloaded += saved.downloaded;
       riskyTermsFound.push(...saved.riskyTerms);
+      console.log(`[${scannedCount}/${totalCandidatesAfterSkip}] OK exported=${exported.length} image_count=${saved.row.image_count} title=${saved.row.source_title_cn.slice(0, 80)}`);
       if (options.debug) {
         console.log(JSON.stringify({
           product_code: saved.row.product_code,
@@ -1846,9 +1974,10 @@ async function main() {
       attemptSequence += 1;
     }
 
-    for (const candidate of candidates) {
+    for (const candidate of domCandidatesToScan) {
       if (exported.length >= options.max) break;
       try {
+        scannedCount += 1;
         const debugPrefix = `product-${String(attemptSequence).padStart(3, "0")}`;
         if (options.debug) {
           await saveDebugScreenshot(page, path.join(debugRoot, `${debugPrefix}-before-click.png`));
@@ -1865,10 +1994,6 @@ async function main() {
           await writeJson(path.join(debugRoot, `${debugPrefix}-rejected-images.json`), product.rejectedImages);
         }
 
-        const identity = crypto
-          .createHash("sha1")
-        .update(productDedupKey(product.title, product.imageUrls))
-        .digest("hex");
         const fingerprintInfo = fingerprintForProduct(product, options.url);
         if (options.skipExisting && existingFingerprints.has(fingerprintInfo.fingerprint)) {
           skippedExisting += 1;
@@ -1876,10 +2001,7 @@ async function main() {
           attemptSequence += 1;
           continue;
         }
-        const titleKey = productTitleDedupKey(product.title);
-        if (seenTitles.has(titleKey)) continue;
-        if (seenHashes.has(identity)) continue;
-        const productCode = `LM-APP-${String(exported.length + 1).padStart(4, "0")}`;
+        const productCode = productCodeFor(options.category, exported.length + 1);
 
         const saved = await exportDetailProduct({
           product: { ...product, source: "dom_detail" },
@@ -1890,24 +2012,38 @@ async function main() {
           storeTitle,
           sourceUrl: options.url,
           sourceFingerprintValue: fingerprintInfo.fingerprint,
+          sourceOrder: candidate.source_order,
+          candidateIndex: candidate.candidate_index,
           clickResult,
         });
         if (!saved.row) {
+          const meta = saved as typeof saved & { realImages?: number; rejectedMedia?: number };
+          if (saved.reason === "fewer_than_9_product_images") skippedFewerThan9ImagesCount += 1;
+          if (saved.reason === "video_or_non_product_media" || (meta.rejectedMedia || 0) > 0) skippedVideoOrNonProductMediaCount += 1;
+          skippedProducts.push({
+            product_code: productCode,
+            source_product_url: candidate.url || product.url,
+            title: product.title,
+            reason: saved.reason,
+            real_images: meta.realImages || 0,
+            candidate_index: candidate.candidate_index,
+            source_order: candidate.source_order,
+          });
           failedProducts.push({
             product_code: productCode,
             source_product_url: candidate.url || product.url,
             reason: saved.reason,
           });
+          console.log(`[${scannedCount}/${totalCandidatesAfterSkip}] SKIP reason=${saved.reason} real_images=${meta.realImages || 0} title=${cleanText(product.title).slice(0, 80)}`);
           await closeDetailAndReturn(page, options.url, clickResult.urlBefore);
           attemptSequence += 1;
           continue;
         }
-        seenHashes.add(identity);
-        seenTitles.add(titleKey);
         existingFingerprints.add(fingerprintInfo.fingerprint);
         exported.push(saved.row);
         totalImagesDownloaded += saved.downloaded;
         riskyTermsFound.push(...saved.riskyTerms);
+        console.log(`[${scannedCount}/${totalCandidatesAfterSkip}] OK exported=${exported.length} image_count=${saved.row.image_count} title=${saved.row.source_title_cn.slice(0, 80)}`);
         if (options.debug) {
           console.log(JSON.stringify({
             product_code: saved.row.product_code,
@@ -1932,6 +2068,7 @@ async function main() {
         await autoScroll(page, Math.max(options.maxScan, attemptSequence + 2));
         attemptSequence += 1;
       } catch (error) {
+        console.log(`[${scannedCount}/${totalCandidatesAfterSkip}] SKIP reason=${error instanceof Error ? error.message : "unknown_product_error"} real_images=0 title=${cleanText(candidate.title).slice(0, 80)}`);
         failedProducts.push({
           product_code: `attempt-${attemptSequence}`,
           source_product_url: candidate.url,
@@ -1951,8 +2088,14 @@ async function main() {
   const productsWithFewerThan6Images = exported
     .filter((item) => item.image_count > 0 && item.image_count < 6)
     .map((item) => item.product_code);
+  const productsWithFewerThan9Images = exported
+    .filter((item) => item.image_count > 0 && item.image_count < 9)
+    .map((item) => item.product_code);
+  const productsWithImageCountNot9 = exported
+    .filter((item) => item.image_count !== 9)
+    .map((item) => item.product_code);
   const productsWithGoodImageCollection = exported
-    .filter((item) => item.image_count === MAX_PRODUCT_IMAGES)
+    .filter((item) => item.image_count === options.imageLimit)
     .map((item) => item.product_code);
   const productsNeedingReview = exported.filter((item) => item.status === "needs_review").map((item) => item.product_code);
   const categoryCounts = exported.reduce<Record<string, number>>((counts, item) => {
@@ -1967,15 +2110,28 @@ async function main() {
     skip_existing: options.skipExisting,
     limit_new: options.limitNew,
     max_scan: options.maxScan,
+    skip_first_candidates: options.skipFirstCandidates,
+    min_product_images: options.minProductImages,
+    image_limit: options.imageLimit,
     output_folder: outputRoot,
+    total_candidates_before_skip: totalCandidatesBeforeSkip,
+    total_candidates_after_skip: totalCandidatesAfterSkip,
+    scanned_count: scannedCount,
+    exported_count: exported.length,
     total_products_found: totalProductsFound,
     total_products_exported: exported.length,
     total_images_downloaded: totalImagesDownloaded,
     skipped_existing_products: skippedExisting,
+    skipped_fewer_than_9_images_count: skippedFewerThan9ImagesCount,
+    skipped_video_or_non_product_media_count: skippedVideoOrNonProductMediaCount,
     failed_products: failedProducts,
+    skipped_products: skippedProducts,
+    ended_before_limit_reason: exported.length < options.max ? "max_scan_or_candidates_exhausted_before_limit_new" : "",
     products_with_missing_images: productsWithMissingImages,
     products_with_fewer_than_3_images: productsWithFewerThan3Images,
     products_with_fewer_than_6_images: productsWithFewerThan6Images,
+    products_with_fewer_than_9_images: productsWithFewerThan9Images,
+    products_with_image_count_not_9: productsWithImageCountNot9,
     products_with_good_image_collection: productsWithGoodImageCollection,
     risky_terms_found: unique(riskyTermsFound),
     products_needing_review: productsNeedingReview,
@@ -1984,6 +2140,10 @@ async function main() {
 
   await fs.writeFile(path.join(outputRoot, "products-import.json"), JSON.stringify(exported, null, 2));
   await fs.writeFile(path.join(outputRoot, "products-import.csv"), `${toCsv(exported)}\n`);
+  await fs.writeFile(path.join(outputRoot, "products-skipped-report.json"), JSON.stringify({
+    skipped_products: skippedProducts,
+    failed_products: failedProducts,
+  }, null, 2));
   await fs.writeFile(path.join(outputRoot, "import-report.json"), JSON.stringify(report, null, 2));
   if (exported.length > 0) {
     await saveLocalHistory(exported);
