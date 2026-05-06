@@ -34,6 +34,41 @@ export function normalizeStatus(value: unknown): TrackingStatus {
   return "unknown";
 }
 
+export function formatTrackingStatus(status: TrackingStatus) {
+  if (status === "delivered") return "Delivered";
+  if (status === "in_transit") return "In transit";
+  if (status === "out_for_delivery") return "Out for delivery";
+  if (status === "exception") return "Exception";
+  return "Unknown";
+}
+
+export function standardizeTrackingEventText(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const normalized = text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+
+  const rules: Array<[RegExp, string]> = [
+    [/没有查询到记录|no tracking record/i, "No tracking record found"],
+    [/未找到|not found/i, "Not found"],
+    [/已签收|签收|妥投|\bentregado\b/i, "Delivered"],
+    [/派送中|派件|投递|out for delivery|\ben reparto\b/i, "Out for delivery"],
+    [/正在准备交付|preparing for delivery/i, "Preparing for delivery"],
+    [/到达目的地|llegada a destino|arrived at destination|arrived in destination/i, "Arrived in destination country"],
+    [/转运中|运输中|运输途中|in transit|en transito|en tránsito/i, "In transit"],
+    [/处理中|processing/i, "Processing"],
+    [/异常|incidencia|exception/i, "Exception"],
+    [/\badmitido\b|accepted/i, "Accepted"],
+    [/\bclasificado\b|sorted/i, "Sorted"],
+    [/\ben oficina\b|at delivery office/i, "At delivery office"],
+  ];
+
+  for (const [pattern, label] of rules) {
+    if (pattern.test(text) || pattern.test(normalized)) return label;
+  }
+
+  return text;
+}
+
 export function normalizeDate(value: unknown) {
   const text = cleanText(value);
   if (!text) return "";
@@ -48,7 +83,7 @@ export function normalizeEvent(event: Partial<TrackingEvent>): TrackingEvent {
   return {
     date: normalizeDate(event.date || ""),
     location: cleanText(event.location || ""),
-    event: cleanText(event.event || ""),
+    event: standardizeTrackingEventText(event.event || ""),
   };
 }
 
@@ -62,4 +97,3 @@ export function sortHistoryDesc(history: TrackingEvent[]) {
       return 0;
     });
 }
-
