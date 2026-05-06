@@ -25,11 +25,12 @@ export function stripHtml(value: string) {
 
 export function normalizeStatus(value: unknown): TrackingStatus {
   const text = cleanText(value).toLowerCase();
+  const compact = text.replace(/\s+/g, "");
 
   if (/delivered|entregado|已签收|签收|妥投/.test(text)) return "delivered";
   if (/out for delivery|en reparto|派送|派件|投递|正在派送/.test(text)) return "out_for_delivery";
   if (/exception|异常|failed|失败|problem|退回/.test(text)) return "exception";
-  if (/in transit|en transito|en tránsito|转运中|运输|transit|shipped|运输途中/.test(text)) return "in_transit";
+  if (/in transit|en transito|en tránsito|转运中|运输|transit|shipped|运输途中/.test(text) || /转运中|运输中/.test(compact)) return "in_transit";
 
   return "unknown";
 }
@@ -46,30 +47,68 @@ export function standardizeTrackingEventText(value: unknown) {
   const text = cleanText(value);
   if (!text) return "";
   const normalized = text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const compact = text.replace(/\s+/g, "");
 
-  const rules: Array<[RegExp, string]> = [
+  const exactEnglishStatus: Record<string, string> = {
+    delivered: "Delivered",
+    in_transit: "In transit",
+    "in transit": "In transit",
+    out_for_delivery: "Out for delivery",
+    "out for delivery": "Out for delivery",
+    exception: "Exception",
+    unknown: "Unknown",
+  };
+  if (exactEnglishStatus[normalized]) return exactEnglishStatus[normalized];
+
+  const nonEnglishRules: Array<[RegExp, string]> = [
     [/没有查询到记录|no tracking record/i, "No tracking record found"],
     [/未找到|not found/i, "Not found"],
-    [/已签收|签收|妥投|\bentregado\b/i, "Delivered"],
-    [/派送中|正在派送|派件|投递|out for delivery|\ben reparto\b/i, "Out for delivery"],
+    [/已签收|签收|妥投/i, "Delivered"],
+    [/派送中|正在派送|派件|投递/i, "Out for delivery"],
     [/正在准备交付|准备交付|preparing for delivery/i, "Preparing for delivery"],
-    [/到达目的地|到达目的国|llegada al pais de destino|arrived in destination/i, "Arrived in destination country"],
-    [/已到达|llegada a destino|arrived at destination/i, "Arrived at destination"],
-    [/转运中|运输中|运输途中|in transit|en transito|en tránsito/i, "In transit"],
+    [/到达目的地|到达目的国/i, "Arrived in destination country"],
+    [/已到达/i, "Arrived"],
+    [/转运中|运输中|运输途中/i, "In transit"],
     [/处理中|processing/i, "Processing"],
-    [/已揽收|揽收|\badmitido\b|accepted/i, "Accepted"],
-    [/\bclasificado\b|sorted/i, "Sorted"],
-    [/离开|departed/i, "Departed"],
-    [/出库|departed facility/i, "Departed facility"],
-    [/入库|arrived at facility/i, "Arrived at facility"],
-    [/清关|海关|customs/i, "Customs clearance"],
-    [/异常|incidencia|exception/i, "Exception"],
-    [/\ben oficina\b|at delivery office/i, "At delivery office"],
+    [/已揽收|揽收/i, "Accepted"],
+    [/离开/i, "Departed"],
+    [/出库/i, "Departed facility"],
+    [/入库/i, "Arrived at facility"],
+    [/清关|海关/i, "Customs clearance"],
+    [/异常/i, "Exception"],
+    [/\bentregado\b/i, "Delivered"],
+    [/\ben reparto\b/i, "Out for delivery"],
+    [/\ben transito\b|\ben tránsito\b/i, "In transit"],
+    [/\badmitido\b/i, "Accepted"],
+    [/\bclasificado\b/i, "Sorted"],
+    [/llegada al pais de destino|llegada al país de destino/i, "Arrived in destination country"],
+    [/llegada a destino/i, "Arrived at destination"],
+    [/\ben oficina\b/i, "At delivery office"],
+    [/\bincidencia\b/i, "Exception"],
   ];
 
-  for (const [pattern, label] of rules) {
-    if (pattern.test(text) || pattern.test(normalized)) return label;
+  for (const [pattern, label] of nonEnglishRules) {
+    if (pattern.test(text) || pattern.test(normalized) || pattern.test(compact)) return label;
   }
+
+  return text;
+}
+
+export function standardizeTrackingLocation(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const upper = text.toUpperCase();
+  const compact = text.replace(/\s+/g, "");
+
+  if (upper === "ES" || /SPAIN|西班牙/i.test(text)) return "Spain";
+  if (upper === "NL" || /荷兰/i.test(text)) {
+    if (/阿姆斯特丹|AMSTERDAM/i.test(text)) return "Amsterdam, Netherlands";
+    return "Netherlands";
+  }
+  if (upper === "DE" || /德国/i.test(text)) return "Germany";
+  if (upper === "CN" || /中国/i.test(text)) return "China";
+  if (/香港|HONG\s*KONG/i.test(text) || compact === "HK") return "Hong Kong";
+  if (/深圳|SHENZHEN/i.test(text)) return "Shenzhen";
 
   return text;
 }
@@ -107,7 +146,7 @@ export function normalizeDate(value: unknown) {
 export function normalizeEvent(event: Partial<TrackingEvent>): TrackingEvent {
   return {
     date: normalizeDate(event.date || ""),
-    location: cleanText(event.location || ""),
+    location: standardizeTrackingLocation(event.location || ""),
     event: standardizeTrackingEventText(event.event || ""),
   };
 }

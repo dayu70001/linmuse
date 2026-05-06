@@ -1,4 +1,4 @@
-import { normalizeEvent, normalizeStatus, sortHistoryDesc, stripHtml } from "@/lib/tracking/formatTracking";
+import { cleanText, normalizeEvent, normalizeStatus, sortHistoryDesc, standardizeTrackingLocation, stripHtml } from "@/lib/tracking/formatTracking";
 import type { TrackingEvent, TrackingSourceResult } from "@/lib/tracking/types";
 
 const TIMEOUT_MS = 9000;
@@ -18,14 +18,21 @@ function tableCells(rowHtml: string) {
   return cells.map((cell) => stripHtml(cell[1]));
 }
 
-function parseZxdHtml(html: string) {
+function looksLikeDate(value: string) {
+  return /^\d{4}[-/.]\d{2}[-/.]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?/.test(value.trim());
+}
+
+export function parseZxdHtml(html: string) {
   if (/没有查询到记录|暂无轨迹|not found|no record|查询不到/i.test(html)) {
-    return [] as TrackingEvent[];
+    return { history: [] as TrackingEvent[], destination: "", summaryStatus: "" };
   }
 
-  const relevant = html.match(/class=["'][^"']*out_order[^"']*["'][\s\S]*?<\/table>/i)?.[0] || html;
-  const rows = [...relevant.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-  const history: TrackingEvent[] = [];
+  const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  const detailHistory: TrackingEvent[] = [];
+  let destination = "";
+  let summaryStatus = "";
+  let summaryDate = "";
+  let summaryLocation = "";
 
   rows.forEach((row) => {
     const cells = tableCells(row[1]).filter(Boolean);
@@ -33,12 +40,38 @@ function parseZxdHtml(html: string) {
     const joined = cells.join(" ").toLowerCase();
     if (/date|time|status|轨迹|时间|地点/.test(joined)) return;
 
-    const [date, location, ...eventParts] = cells.length >= 3 ? cells : [cells[0], "", cells.slice(1).join(" ")];
-    const event = eventParts.join(" ") || cells[cells.length - 1];
-    history.push(normalizeEvent({ date, location, event }));
+    const dateIndex = cells.findIndex(looksLikeDate);
+    if (dateIndex === 0 && cells.length >= 3) {
+      const [date, location, ...eventParts] = cells;
+      const event = eventParts.join(" ");
+      if (event) detailHistory.push(normalizeEvent({ date, location, event }));
+      return;
+    }
+
+    if (dateIndex >= 0) {
+      const possibleDestination = cells.find((cell, index) => index !== dateIndex && /spain|西班牙|\bES\b|germany|德国|\bDE\b|netherlands|荷兰|\bNL\b/i.test(cell));
+      destination ||= standardizeTrackingLocation(possibleDestination || "");
+      summaryDate ||= cells[dateIndex];
+      summaryLocation ||= possibleDestination || "";
+      summaryStatus ||= cells.slice(dateIndex + 1).join(" ") || cells[cells.length - 1] || "";
+    }
   });
 
-  return sortHistoryDesc(history);
+  const history = sortHistoryDesc(detailHistory);
+  if (history.length > 0) {
+    destination ||= standardizeTrackingLocation(history[0].location);
+    return { history, destination, summaryStatus };
+  }
+
+  if (summaryDate || summaryStatus) {
+    return {
+      history: sortHistoryDesc([normalizeEvent({ date: summaryDate, location: summaryLocation, event: summaryStatus })]),
+      destination: destination || standardizeTrackingLocation(summaryLocation),
+      summaryStatus,
+    };
+  }
+
+  return { history: [] as TrackingEvent[], destination: "", summaryStatus: "" };
 }
 
 export async function queryZxd(trackingNumber: string): Promise<TrackingSourceResult> {
@@ -62,19 +95,21 @@ export async function queryZxd(trackingNumber: string): Promise<TrackingSourceRe
     }
 
     const html = await response.text();
-    const history = parseZxdHtml(html);
+    const parsed = parseZxdHtml(html);
+    const history = parsed.history;
     if (history.length === 0) {
       return { tracking_number: trackingNumber, found: false, source: "zxd", error: "not_found" };
     }
 
     const latest = history[0];
+    const statusText = cleanText(parsed.summaryStatus) || latest.event;
     return {
       tracking_number: trackingNumber,
       found: true,
       source: "zxd",
       carrier: "ZXD Express",
-      status: normalizeStatus(latest.event),
-      destination: "",
+      status: normalizeStatus(statusText),
+      destination: parsed.destination || "",
       latest_update: latest,
       history,
     };
@@ -87,4 +122,3 @@ export async function queryZxd(trackingNumber: string): Promise<TrackingSourceRe
     };
   }
 }
-
