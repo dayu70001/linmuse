@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTrackingCache, setTrackingCache } from "@/lib/tracking/cache";
-import { normalizeTrackingNumber } from "@/lib/tracking/formatTracking";
+import { normalizeTrackingNumber, normalizeTrackingResultToEnglish } from "@/lib/tracking/formatTracking";
 import { query17track } from "@/lib/tracking/query17track";
 import { queryHualei } from "@/lib/tracking/queryHualei";
 import { queryZxd } from "@/lib/tracking/queryZxd";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
   const cached = getTrackingCache(trackingNumber);
   if (cached) {
-    return NextResponse.json(cached, {
+    return NextResponse.json(normalizeTrackingResultToEnglish(cached), {
       headers: { "Cache-Control": "no-store" },
     });
   }
@@ -33,22 +33,25 @@ export async function POST(request: Request) {
 
   const hualei = await queryHualei(trackingNumber);
   if (hualei.found) {
-    setTrackingCache(trackingNumber, hualei);
-    return NextResponse.json(hualei, { headers: { "Cache-Control": "no-store" } });
+    const normalized = normalizeTrackingResultToEnglish(hualei);
+    setTrackingCache(trackingNumber, normalized);
+    return NextResponse.json(normalized, { headers: { "Cache-Control": "no-store" } });
   }
   errors.hualei = hualei.error;
 
   const zxd = await queryZxd(trackingNumber);
   if (zxd.found) {
-    setTrackingCache(trackingNumber, zxd);
-    return NextResponse.json(zxd, { headers: { "Cache-Control": "no-store" } });
+    const normalized = normalizeTrackingResultToEnglish(zxd);
+    setTrackingCache(trackingNumber, normalized);
+    return NextResponse.json(normalized, { headers: { "Cache-Control": "no-store" } });
   }
   errors.zxd = zxd.error;
 
   const track17 = await query17track(trackingNumber);
   if (track17.found) {
-    setTrackingCache(trackingNumber, track17);
-    return NextResponse.json(track17, { headers: { "Cache-Control": "no-store" } });
+    const normalized = normalizeTrackingResultToEnglish(track17);
+    setTrackingCache(trackingNumber, normalized);
+    return NextResponse.json(normalized, { headers: { "Cache-Control": "no-store" } });
   }
   errors.track17 = track17.error;
 
@@ -62,4 +65,3 @@ export async function POST(request: Request) {
   setTrackingCache(trackingNumber, failure);
   return NextResponse.json(failure, { headers: { "Cache-Control": "no-store" } });
 }
-
