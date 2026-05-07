@@ -90,6 +90,32 @@ const SUBCATEGORY_DISPLAY_ORDER: Record<string, string[]> = {
   ],
 };
 
+const BRAND_ALIAS_MAP: Record<string, string[]> = {
+  "Louis Vuitton": ["Louis Vuitton", "LV", "Lv", "lv", "louis vuitton", "路易威登"],
+  "Saint Laurent": ["Saint Laurent", "YSL", "Yves Saint Laurent", "ysl", "圣罗兰"],
+  "Miu Miu": ["Miu Miu", "Miumiu", "MIUMIU", "miu miu", "miumiu", "缪缪"],
+  Hermes: ["Hermes", "Hermès", "HERMES", "hermes", "爱马仕"],
+  Dior: ["Dior", "DIOR", "dior", "D家", "迪奥"],
+  Chanel: ["Chanel", "CHANEL", "chanel", "香奈儿"],
+  Gucci: ["Gucci", "GUCCI", "gucci"],
+  Fendi: ["Fendi", "FENDI", "fendi"],
+  Celine: ["Celine", "Céline", "CELINE", "celine"],
+  Loewe: ["Loewe", "LOEWE", "loewe"],
+  Goyard: ["Goyard", "GOYARD", "goyard"],
+  Balenciaga: ["Balenciaga", "BALENCIAGA", "balenciaga"],
+  Prada: ["Prada", "PRADA", "prada"],
+  "Bottega Veneta": ["Bottega Veneta", "Bottega", "BOTTEGA VENETA", "bottega veneta", "bottega"],
+  "Tory Burch": ["Tory Burch", "TORY BURCH", "tory burch"],
+  "Alexander Wang": ["Alexander Wang", "ALEXANDER WANG", "alexander wang"],
+  Nike: ["Nike", "NIKE", "nike"],
+  Adidas: ["Adidas", "ADIDAS", "adidas"],
+  "New Balance": ["New Balance", "NEW BALANCE", "new balance", "NB"],
+  Asics: ["Asics", "ASICS", "asics"],
+  Rolex: ["Rolex", "ROLEX", "rolex"],
+  "Audemars Piguet": ["Audemars Piguet", "AP", "AUDEMARS PIGUET", "audemars piguet"],
+  Cartier: ["Cartier", "CARTIER", "cartier"],
+};
+
 export function cleanTaxonomyValue(value: string | null | undefined) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -97,6 +123,40 @@ export function cleanTaxonomyValue(value: string | null | undefined) {
 export function isVisibleTaxonomyValue(value: string | null | undefined) {
   const text = cleanTaxonomyValue(value);
   return Boolean(text && !HIDDEN_VALUES.has(text.toLowerCase()));
+}
+
+function brandKey(value: string | null | undefined) {
+  return cleanTaxonomyValue(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+}
+
+const BRAND_CANONICAL_BY_ALIAS = new Map(
+  Object.entries(BRAND_ALIAS_MAP).flatMap(([canonical, aliases]) =>
+    aliases.map((alias) => [brandKey(alias), canonical] as const),
+  ),
+);
+
+export function canonicalizeBrand(value: string | null | undefined) {
+  const text = cleanTaxonomyValue(value);
+  if (!isVisibleTaxonomyValue(text)) return "";
+  return BRAND_CANONICAL_BY_ALIAS.get(brandKey(text)) || text;
+}
+
+export function getBrandAliases(canonicalBrand: string | null | undefined) {
+  const canonical = canonicalizeBrand(canonicalBrand);
+  if (!canonical) return [];
+  return Array.from(new Set([canonical, ...(BRAND_ALIAS_MAP[canonical] || [])].map(cleanTaxonomyValue).filter(Boolean)));
+}
+
+export function getBrandFilterValues(value: string | null | undefined) {
+  return getBrandAliases(value);
+}
+
+export function sortBrands(brands: string[]) {
+  return [...new Set(brands.map(canonicalizeBrand).filter(isVisibleTaxonomyValue))].sort((a, b) => a.localeCompare(b));
 }
 
 export function isAllowedSubcategoryForCategory(category: string | null | undefined, value: string | null | undefined) {

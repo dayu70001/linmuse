@@ -2,10 +2,13 @@ import type { ProductBadge } from "@/data/products";
 import {
   ALL_CATEGORY,
   HOME_FEATURED_CATEGORIES,
+  canonicalizeBrand,
   cleanTaxonomyValue,
+  getBrandFilterValues,
   isVisibleTaxonomyValue,
   isAllowedSubcategoryForCategory,
   sortCategories,
+  sortBrands,
   sortSubcategories,
 } from "@/lib/catalogTaxonomy";
 
@@ -199,6 +202,12 @@ function encodeValue(value: string) {
   return encodeURIComponent(value.trim());
 }
 
+function encodeInValues(values: string[]) {
+  return values
+    .map((value) => `"${encodeURIComponent(value.trim().replaceAll('"', '\\"'))}"`)
+    .join(",");
+}
+
 function encodeIlike(value: string) {
   return encodeURIComponent(`*${value.replace(/[(),]/g, " ").trim()}*`);
 }
@@ -216,7 +225,7 @@ function mapProductRow(row: Record<string, unknown>): CatalogProduct {
     slug: String(row.slug || row.product_code || ""),
     category: normalizeCategory(typeof row.category === "string" ? row.category : null),
     subcategory: typeof row.subcategory === "string" ? row.subcategory : null,
-    brand: typeof row.brand === "string" ? row.brand : null,
+    brand: typeof row.brand === "string" ? canonicalizeBrand(row.brand) : null,
     model: typeof row.model === "string" ? row.model : null,
     title_en: String(row.title_en || row.title_cn || row.product_code || "Selected Product"),
     title_cn: typeof row.title_cn === "string" ? row.title_cn : null,
@@ -305,7 +314,14 @@ function buildCatalogPath(filters: CatalogActiveFilters, page: number, pageSize:
 
   if (activeCategory !== ALL_CATEGORY) params.push(`category=eq.${encodeValue(activeCategory)}`);
   if (filters.subcategory) params.push(`subcategory=eq.${encodeValue(filters.subcategory)}`);
-  if (includeClassificationFields && filters.brand) params.push(`brand=eq.${encodeValue(filters.brand)}`);
+  if (includeClassificationFields && filters.brand) {
+    const brandValues = getBrandFilterValues(filters.brand);
+    if (brandValues.length > 1) {
+      params.push(`brand=in.(${encodeInValues(brandValues)})`);
+    } else if (brandValues.length === 1) {
+      params.push(`brand=eq.${encodeValue(brandValues[0])}`);
+    }
+  }
   if (includeClassificationFields && filters.model) params.push(`model=eq.${encodeValue(filters.model)}`);
 
   if (filters.search) {
@@ -325,7 +341,7 @@ function buildCatalogPath(filters: CatalogActiveFilters, page: number, pageSize:
 function normalizeFilters(filters: CatalogFilters, filterOptions?: CatalogFilterOptions): CatalogActiveFilters {
   const rawCategory = parseCategory(filters.category);
   const category = filterOptions && !filterOptions.categories.includes(rawCategory) ? ALL_CATEGORY : rawCategory;
-  const brand = cleanFilter(filters.brand);
+  const brand = canonicalizeBrand(cleanFilter(filters.brand));
   const model = cleanFilter(filters.model);
   const subcategory = cleanFilter(filters.subcategory);
   const safeSubcategory = subcategory && isAllowedSubcategoryForCategory(category, subcategory) ? subcategory : "";
@@ -362,7 +378,7 @@ async function getCatalogFilterOptions(category = "All"): Promise<CatalogFilterO
             .map((product) => String(product.subcategory || ""))
             .filter((subcategory) => isAllowedSubcategoryForCategory(activeCategory, subcategory)),
         ),
-    brands: [...new Set(optionRows.map((product) => String(product.brand || "").trim()).filter(isVisibleOption))].sort(),
+    brands: sortBrands(optionRows.map((product) => String(product.brand || "").trim()).filter(isVisibleOption)),
     models: [...new Set(optionRows.map((product) => String(product.model || "").trim()).filter(isVisibleOption))].sort(),
   };
 }
