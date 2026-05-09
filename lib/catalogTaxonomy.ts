@@ -18,6 +18,7 @@ export const MOBILE_PRIMARY_CATEGORIES = [
   "Shoes",
   "Watches",
   "Bags",
+  "Accessories",
 ];
 
 export const HOME_FEATURED_CATEGORIES = [
@@ -25,6 +26,7 @@ export const HOME_FEATURED_CATEGORIES = [
   "Shoes",
   "Watches",
   "Bags",
+  "Accessories",
 ];
 
 const HIDDEN_VALUES = new Set([

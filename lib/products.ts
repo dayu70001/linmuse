@@ -11,6 +11,11 @@ import {
   sortBrands,
   sortSubcategories,
 } from "@/lib/catalogTaxonomy";
+import {
+  getCatalogProductBySlugFromD1,
+  getCatalogProductsFromD1,
+  isD1WorkerProductSource,
+} from "@/lib/productsD1Api";
 
 export type CatalogProduct = {
   id?: string;
@@ -396,6 +401,8 @@ function sortNewestProducts(products: CatalogProduct[]) {
   });
 }
 
+const NEW_ARRIVALS_TOTAL_LIMIT = 199;
+
 async function getLimitedNewArrivalsProducts(
   page: number,
   pageSize: number,
@@ -454,7 +461,7 @@ async function getLimitedNewArrivalsProducts(
     rows = result.rows;
   }
 
-  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows));
+  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   const total = cleanRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -472,6 +479,10 @@ async function getLimitedNewArrivalsProducts(
 }
 
 export async function getCatalogProducts(filters: CatalogFilters = {}) {
+  if (isD1WorkerProductSource()) {
+    return getCatalogProductsFromD1(filters);
+  }
+
   const page = parsePage(filters.page);
   const pageSize = filters.pageSize || 25;
   const initialCategory = parseCategory(filters.category).toString();
@@ -524,6 +535,10 @@ export async function getCatalogProducts(filters: CatalogFilters = {}) {
 }
 
 export async function getCatalogProductBySlug(slug: string) {
+  if (isD1WorkerProductSource()) {
+    return getCatalogProductBySlugFromD1(slug);
+  }
+
   const result = await fetchProducts(
     `products?select=${detailProductSelect}&slug=eq.${encodeURIComponent(slug)}&is_active=eq.true&limit=1`
   );
