@@ -1,0 +1,317 @@
+import {
+  ALL_CATEGORY,
+  HOME_FEATURED_CATEGORIES,
+  cleanTaxonomyValue,
+  isVisibleTaxonomyValue,
+  sortBrands,
+  sortCategories,
+} from "@/lib/catalogTaxonomy";
+import type {
+  CatalogActiveFilters,
+  CatalogFilters,
+  CatalogFilterOptions,
+  CatalogProduct,
+  CatalogProductsResult,
+} from "@/lib/products";
+
+type D1ListProduct = {
+  product_code?: string;
+  slug?: string;
+  title?: string;
+  category?: string;
+  subcategory?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  gender?: string | null;
+  color?: string | null;
+  main_thumbnail_url?: string | null;
+  imported_at?: string | null;
+};
+
+type D1DetailProduct = D1ListProduct & {
+  description?: string | null;
+  main_image_url?: string | null;
+  gallery_thumbnail_urls?: string[] | string | null;
+  gallery_image_urls?: string[] | string | null;
+  created_at?: string | null;
+  status?: string | null;
+  is_active?: boolean | number | null;
+};
+
+type D1CatalogResponse = {
+  products?: D1ListProduct[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+};
+
+type D1FiltersResponse = {
+  categories?: string[];
+  subcategories?: string[];
+  brands?: string[];
+  models?: string[];
+};
+
+export function isD1WorkerProductSource() {
+  return process.env.PRODUCT_SOURCE === "d1-worker";
+}
+
+function apiBase() {
+  return (process.env.PRODUCT_API_BASE || "http://127.0.0.1:8787").replace(/\/+$/, "");
+}
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function parsePage(value: CatalogFilters["page"]) {
+  return Math.max(1, Number(value || 1) || 1);
+}
+
+const NEW_ARRIVALS_TOTAL_LIMIT = 199;
+
+function newestTime(product: CatalogProduct) {
+  return Date.parse(product.imported_at || product.created_at || "") || 0;
+}
+
+function sortNewestProducts(products: CatalogProduct[]) {
+  return [...products].sort((a, b) => {
+    const timeDiff = newestTime(b) - newestTime(a);
+    if (timeDiff !== 0) return timeDiff;
+    return String(b.product_code || "").localeCompare(String(a.product_code || ""));
+  });
+}
+
+function isClearlyWrongShoesProduct(product: CatalogProduct) {
+  if (product.category !== "Shoes") return false;
+
+  const title = String(product.title_en || "").toLowerCase();
+  const apparelSignals = [
+    "short sleeve",
+    "shorts set",
+    "t-shirt",
+    "shirt",
+    "pants",
+    "hoodie",
+    "sweater",
+    "knitwear",
+    "jacket",
+    "coat",
+    "vest",
+    "polo",
+  ];
+
+  return apparelSignals.some((word) => title.includes(word));
+}
+
+function removeClearlyWrongProducts(products: CatalogProduct[]) {
+  return products.filter((product) => !isClearlyWrongShoesProduct(product));
+}
+
+function normalizeArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${apiBase()}${path}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`D1 product API failed: ${response.status}${text ? ` ${text.slice(0, 240)}` : ""}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+function queryString(params: Record<string, string | number | null | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    const text = clean(value);
+    if (text && text !== ALL_CATEGORY) search.set(key, text);
+  });
+  const value = search.toString();
+  return value ? `?${value}` : "";
+}
+
+function normalizeCategory(value: unknown) {
+  const category = cleanTaxonomyValue(typeof value === "string" ? value : "");
+  return isVisibleTaxonomyValue(category) ? category : "Products";
+}
+
+function sortModels(models: string[]) {
+  return [...new Set(models.map(cleanTaxonomyValue).filter(isVisibleTaxonomyValue))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+function mapD1Product(row: D1ListProduct | D1DetailProduct): CatalogProduct {
+  const gallery = normalizeArray((row as D1DetailProduct).gallery_image_urls);
+  const thumbnails = normalizeArray((row as D1DetailProduct).gallery_thumbnail_urls);
+  const mainImage = clean((row as D1DetailProduct).main_image_url) || gallery[0] || clean(row.main_thumbnail_url) || null;
+  const mainThumbnail = clean(row.main_thumbnail_url) || thumbnails[0] || mainImage;
+
+  return {
+    product_code: clean(row.product_code),
+    slug: clean(row.slug || row.product_code).toLowerCase(),
+    category: normalizeCategory(row.category),
+    subcategory: clean(row.subcategory) || null,
+    brand: clean(row.brand) || null,
+    model: clean(row.model) || null,
+    title_en: clean(row.title || row.product_code || "Selected Product"),
+    title_cn: null,
+    description_en: clean((row as D1DetailProduct).description) || null,
+    sizes_display: null,
+    colors_display: null,
+    moq: null,
+    delivery_time: null,
+    main_image_url: mainImage,
+    main_thumbnail_url: mainThumbnail,
+    gallery_image_urls: gallery.length > 0 ? gallery : mainImage ? [mainImage] : [],
+    gallery_thumbnail_urls: thumbnails.length > 0 ? thumbnails : mainThumbnail ? [mainThumbnail] : [],
+    image_count: gallery.length || thumbnails.length || null,
+    status: clean((row as D1DetailProduct).status) || "published",
+    is_active: (row as D1DetailProduct).is_active === 0 ? false : true,
+    is_featured: null,
+    badge: "New",
+    imported_at: clean(row.imported_at) || null,
+    created_at: clean((row as D1DetailProduct).created_at) || null,
+  };
+}
+
+function normalizeActiveFilters(filters: CatalogFilters, filterOptions: CatalogFilterOptions): CatalogActiveFilters {
+  const rawCategory = cleanTaxonomyValue(filters.category || "");
+  const category = rawCategory && filterOptions.categories.includes(rawCategory) ? rawCategory : ALL_CATEGORY;
+  const subcategory = clean(filters.subcategory);
+  const brand = clean(filters.brand);
+  const model = clean(filters.model);
+
+  return {
+    category,
+    subcategory: subcategory && filterOptions.subcategories.includes(subcategory) ? subcategory : "",
+    brand: brand && filterOptions.brands.includes(brand) ? brand : "",
+    model: model && filterOptions.models.includes(model) ? model : "",
+    search: clean(filters.search),
+  };
+}
+
+export async function getD1FilterOptions(category = ALL_CATEGORY): Promise<CatalogFilterOptions> {
+  const requestedCategory = cleanTaxonomyValue(category || "") || ALL_CATEGORY;
+  const categoryQuery = requestedCategory !== ALL_CATEGORY ? queryString({ category: requestedCategory }) : "";
+  const [allFilters, categoryFilters] = await Promise.all([
+    fetchJson<D1FiltersResponse>("/filters"),
+    requestedCategory === ALL_CATEGORY
+      ? Promise.resolve<D1FiltersResponse>({})
+      : fetchJson<D1FiltersResponse>(`/filters${categoryQuery}`),
+  ]);
+  const categories = [ALL_CATEGORY, ...sortCategories((allFilters.categories || []).filter(Boolean))];
+  const activeCategory = categories.includes(requestedCategory) ? requestedCategory : ALL_CATEGORY;
+  const scoped = activeCategory === ALL_CATEGORY
+    ? { subcategories: [], brands: allFilters.brands || [], models: allFilters.models || [] }
+    : categoryFilters;
+
+  return {
+    categories,
+    subcategories: scoped.subcategories || [],
+    brands: sortBrands(scoped.brands || []),
+    models: sortModels(scoped.models || []),
+  };
+}
+
+async function getLimitedNewArrivalsFromD1(
+  page: number,
+  pageSize: number,
+  filterOptions: CatalogFilterOptions,
+  normalized: CatalogActiveFilters,
+): Promise<CatalogProductsResult> {
+  const perCategoryLimit = 50;
+  let rows: CatalogProduct[] = [];
+
+  if (normalized.category === ALL_CATEGORY) {
+    const visibleHomeCategories = HOME_FEATURED_CATEGORIES.filter((category) =>
+      filterOptions.categories.includes(category),
+    );
+    const batches = await Promise.all(
+      visibleHomeCategories.map(async (category) => {
+        const response = await fetchJson<D1CatalogResponse>(`/latest${queryString({
+          category,
+          page: 1,
+          pageSize: perCategoryLimit,
+        })}`);
+        return (response.products || []).map(mapD1Product);
+      }),
+    );
+    rows = batches.flat();
+  } else {
+    const response = await fetchJson<D1CatalogResponse>(`/latest${queryString({
+      category: normalized.category,
+      page: 1,
+      pageSize: perCategoryLimit,
+    })}`);
+    rows = (response.products || []).map(mapD1Product);
+  }
+
+  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
+  const total = cleanRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const safeOffset = (safePage - 1) * pageSize;
+
+  return {
+    products: cleanRows.slice(safeOffset, safeOffset + pageSize),
+    total,
+    page: safePage,
+    pageSize,
+    totalPages,
+    filters: normalized,
+    filterOptions,
+  };
+}
+
+export async function getCatalogProductsFromD1(filters: CatalogFilters = {}): Promise<CatalogProductsResult> {
+  const page = parsePage(filters.page);
+  const pageSize = filters.pageSize || 25;
+  const initialOptions = await getD1FilterOptions(clean(filters.category) || ALL_CATEGORY);
+  const normalized = normalizeActiveFilters(filters, initialOptions);
+  if (filters.onlyNew) {
+    return getLimitedNewArrivalsFromD1(page, pageSize, initialOptions, normalized);
+  }
+
+  const endpoint = filters.onlyNew ? "/latest" : "/catalog";
+  const response = await fetchJson<D1CatalogResponse>(`${endpoint}${queryString({
+    category: normalized.category,
+    subcategory: filters.onlyNew ? "" : normalized.subcategory,
+    brand: filters.onlyNew ? "" : normalized.brand,
+    model: filters.onlyNew ? "" : normalized.model,
+    search: filters.onlyNew ? "" : normalized.search,
+    page,
+    pageSize,
+  })}`);
+  const filterOptions = normalized.category === ALL_CATEGORY
+    ? initialOptions
+    : await getD1FilterOptions(normalized.category);
+
+  return {
+    products: (response.products || []).map(mapD1Product).filter((product) => product.product_code && product.slug),
+    total: Number(response.total || 0),
+    page: Number(response.page || page),
+    pageSize: Number(response.pageSize || pageSize),
+    totalPages: Number(response.totalPages || Math.max(1, Math.ceil(Number(response.total || 0) / pageSize))),
+    filters: normalized,
+    filterOptions,
+  };
+}
+
+export async function getCatalogProductBySlugFromD1(slugOrCode: string) {
+  const product = await fetchJson<D1DetailProduct>(`/product/${encodeURIComponent(slugOrCode)}`);
+  return mapD1Product(product);
+}
