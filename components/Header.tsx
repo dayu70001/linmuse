@@ -9,7 +9,7 @@ export async function Header() {
   const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel || "/contact";
 
   return (
-    <header className="sticky top-0 z-[80] border-b border-[#E8E2D4] bg-white">
+    <header className="sticky top-0 z-[200] border-b border-[#E8E2D4] bg-white pointer-events-auto">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-8 lg:px-10">
         <Link href="/" className="font-serif text-xl font-semibold text-ink sm:text-2xl">
           {siteConfig.brandName}

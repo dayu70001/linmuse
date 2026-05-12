@@ -2,53 +2,41 @@ import { Camera, PackageCheck, Video } from "lucide-react";
 import Link from "next/link";
 import { FeedbackGallery } from "@/components/FeedbackGallery";
 import { SectionHeading } from "@/components/SectionHeading";
-import { getImage, getSiteImages } from "@/lib/siteData";
-
-const proofSections = [
-  {
-    title: "Packing Photos",
-    imageKey: "shipping_01",
-    icon: Camera,
-    image: "/images/mock/shipping-proof-001.jpg",
-    alt: "Packing and shipping proof",
-    text: "Selected packing and preparation records from our order process.",
-  },
-  {
-    title: "Shipping Updates",
-    imageKey: "shipping_02",
-    icon: Video,
-    image: "/images/mock/shipping-proof-002.jpg",
-    alt: "Packing and shipping update",
-    text: "Dispatch and shipment updates for buyer review.",
-  },
-  {
-    title: "Warehouse Updates",
-    imageKey: "shipping_04",
-    icon: PackageCheck,
-    image: "/images/mock/factory-production-003.jpg",
-    alt: "Factory preparation update",
-    text: "Daily preparation, checking, and dispatch updates from our sourcing process.",
-  },
-];
-
-const customerFeedbackKeys = [
-  "customer_feedback_01",
-  "customer_feedback_02",
-  "customer_feedback_03",
-  "customer_feedback_04",
-  "customer_feedback_05",
-  "customer_feedback_06",
-] as const;
+import { getHomepageSettings } from "@/lib/homepageSettings";
 
 export default async function ShippingProofPage() {
-  const siteImages = await getSiteImages();
-  const feedbackImages = customerFeedbackKeys.map((key) => {
-    const image = getImage(siteImages, key);
-    return {
-      src: image.url,
-      alt: image.alt,
-    };
-  });
+  const settings = await getHomepageSettings();
+  const img = settings.images;
+
+  const proofSections = [
+    {
+      title: "Packing Photos",
+      icon: Camera,
+      src: img["shipping_proof_img_01"] || "/images/mock/shipping-proof-001.jpg",
+      alt: "Packing and shipping proof",
+      text: "Selected packing and preparation records from our order process.",
+    },
+    {
+      title: "Shipping Updates",
+      icon: Video,
+      src: img["shipping_proof_img_02"] || "/images/mock/shipping-proof-002.jpg",
+      alt: "Packing and shipping update",
+      text: "Dispatch and shipment updates for buyer review.",
+    },
+    {
+      title: "Warehouse Updates",
+      icon: PackageCheck,
+      src: img["shipping_proof_img_03"] || "/images/mock/factory-production-003.jpg",
+      alt: "Factory preparation update",
+      text: "Daily preparation, checking, and dispatch updates from our sourcing process.",
+    },
+  ];
+
+  const feedbackImages = [
+    { src: img["shipping_proof_img_04"] || "/images/mock/factory-production-001.jpg", alt: "Customer feedback 1" },
+    { src: img["shipping_proof_img_05"] || "/images/mock/factory-production-002.jpg", alt: "Customer feedback 2" },
+    { src: img["shipping_proof_img_06"] || "/images/mock/shipping-proof-003.jpg",     alt: "Customer feedback 3" },
+  ];
 
   return (
     <main className="bg-white">
@@ -74,21 +62,21 @@ export default async function ShippingProofPage() {
             {proofSections.map((section) => {
               const Icon = section.icon;
               return (
-              <article className="card overflow-hidden bg-paper" key={section.title}>
-                <img
-                  src={getImage(siteImages, section.imageKey).url || section.image}
-                  alt={getImage(siteImages, section.imageKey).alt || section.alt}
-                  className="aspect-[4/3] w-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="p-4">
-                  <Icon className="text-gold" size={24} />
-                  <h2 className="mt-3 font-serif text-xl text-ink sm:text-2xl">{section.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted">{section.text}</p>
-                </div>
-              </article>
-            );
+                <article className="card overflow-hidden bg-paper" key={section.title}>
+                  <img
+                    src={section.src}
+                    alt={section.alt}
+                    className="aspect-[4/3] w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="p-4">
+                    <Icon className="text-gold" size={24} />
+                    <h2 className="mt-3 font-serif text-xl text-ink sm:text-2xl">{section.title}</h2>
+                    <p className="mt-2 text-sm leading-6 text-muted">{section.text}</p>
+                  </div>
+                </article>
+              );
             })}
           </div>
         </div>

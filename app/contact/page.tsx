@@ -3,41 +3,45 @@ import Link from "next/link";
 import { SafeEmailLink } from "@/components/SafeEmailLink";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import { getSetting, getSiteSettings } from "@/lib/siteData";
+import { getHomepageSettings } from "@/lib/homepageSettings";
 
 export default async function ContactPage() {
-  const settings = await getSiteSettings();
-  const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
-  const whatsappGroup = getSetting(settings, "whatsapp_group_url");
-  const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
-  const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
-  const email = getSetting(settings, "email") || siteConfig.email;
+  const settings = await getHomepageSettings();
+  const { telegram, whatsapp, instagram, facebook, email: settingsEmail } = settings.social;
+
+  const telegram_url    = telegram    || siteConfig.telegramChannel || "/contact";
+  const whatsapp_url    = whatsapp    || "/contact";
+  const instagram_url   = instagram   || siteConfig.instagramUrl    || "/contact";
+  const facebook_url    = facebook    || siteConfig.facebookUrl     || "/contact";
+  const email           = settingsEmail || siteConfig.email;
+
   const [emailUser, ...emailDomainParts] = email.split("@");
   const emailDomain = emailDomainParts.join(".").replace(/^\./, "") || "gmail.com";
+
   const cards = [
     {
       title: "Telegram Group",
       text: "Join daily product updates, new arrivals, shipping proof, and buyer updates.",
       icon: Send,
-      href: telegram || "/contact",
+      href: telegram_url,
     },
     {
       title: "WhatsApp Group",
       text: "Use the group/community channel when available for product updates and announcements.",
       icon: Users,
-      href: whatsappGroup || "/contact",
+      href: whatsapp_url,
     },
     {
       title: "Instagram",
       text: "Follow selected product previews and visual updates.",
       icon: Share2,
-      href: instagram || "/contact",
+      href: instagram_url,
     },
     {
       title: "Facebook",
       text: "Follow brand and catalog updates.",
       icon: Share2,
-      href: facebook || "/contact",
+      href: facebook_url,
     },
   ];
 
@@ -69,10 +73,10 @@ export default async function ContactPage() {
             <div className="card p-6">
               <h2 className="font-serif text-2xl text-ink">Customer Support</h2>
               <div className="mt-5 grid gap-3 text-sm font-semibold text-muted sm:grid-cols-2">
-                <Link href={telegram || "/contact"}>Telegram Group</Link>
-                <Link href={whatsappGroup || "/contact"}>WhatsApp Group</Link>
-                <Link href={instagram || "/contact"}>Instagram</Link>
-                <Link href={facebook || "/contact"}>Facebook</Link>
+                <Link href={telegram_url}>Telegram Group</Link>
+                <Link href={whatsapp_url}>WhatsApp Group</Link>
+                <Link href={instagram_url}>Instagram</Link>
+                <Link href={facebook_url}>Facebook</Link>
                 <SafeEmailLink user={emailUser} domain={emailDomain}>
                   <Mail className="mr-2 inline text-gold" size={16} />
                   Email us

@@ -23,11 +23,11 @@ export default function MobileMenu({ telegramHref = '/contact' }: { telegramHref
   }, [pathname]);
 
   return (
-    <div className="relative z-[100] md:hidden">
+    <div className="relative z-[220] pointer-events-auto md:hidden">
       <button
         aria-expanded={open}
         aria-label={open ? "Close navigation menu" : "Open navigation menu"}
-        className="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-2xl border border-neutral-200 bg-white text-2xl font-semibold text-neutral-900 shadow-sm active:scale-[0.98] [&::-webkit-details-marker]:hidden"
+        className="relative z-[230] flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-2xl border border-neutral-200 bg-white text-2xl font-semibold text-neutral-900 shadow-sm pointer-events-auto touch-manipulation active:scale-[0.98] [&::-webkit-details-marker]:hidden"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
@@ -37,7 +37,7 @@ export default function MobileMenu({ telegramHref = '/contact' }: { telegramHref
       {open ? (
         <nav
           aria-label="Mobile navigation"
-          className="absolute right-0 top-full z-[120] mt-3 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-neutral-200 bg-white p-2 shadow-2xl"
+          className="absolute right-0 top-full z-[240] mt-3 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-neutral-200 bg-white p-2 shadow-2xl pointer-events-auto"
         >
           <div className="flex flex-col">
             {NAV_LINKS.map((item) => (

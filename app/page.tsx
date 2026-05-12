@@ -12,10 +12,12 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
+import { getHomepageSettings, HOME_FEATURED_SLOTS } from "@/lib/homepageSettings";
 import type { CatalogProduct } from "@/lib/products";
-import { getImage, getSetting, getSiteImages, getSiteSettings } from "@/lib/siteData";
+import { getCatalogProductBySlugFromD1, isD1WorkerProductSource } from "@/lib/productsD1Api";
 
 type ProductCategory = string;
+type FeaturedCodes = Record<string, string>;
 
 const trustPoints = [
   "Orders from 1 piece",
@@ -27,29 +29,25 @@ const trustPoints = [
 const categoryCards = [
   {
     name: "Apparel",
-    imageKey: "category_apparel",
-    image: "/images/mock/category-apparel.jpg",
+    imageKey: "home_img_category_apparel",
     alt: "Neutral apparel selection for LM Dkbrand",
     text: "Everyday fashion selections for retail and sourcing.",
   },
   {
     name: "Shoes",
-    imageKey: "category_shoes",
-    image: "/images/mock/category-shoes.jpg",
+    imageKey: "home_img_category_shoes",
     alt: "Curated lifestyle shoes for retail and wholesale",
     text: "Clean footwear options for single or bulk orders.",
   },
   {
     name: "Watches",
-    imageKey: "category_watches",
-    image: "/images/mock/category-watches.jpg",
+    imageKey: "home_img_category_watches",
     alt: "Minimal fashion watches selection",
     text: "Minimal watch styles for gifting and catalogs.",
   },
   {
     name: "Bags",
-    imageKey: "category_bags",
-    image: "/images/mock/category-bags.jpg",
+    imageKey: "home_img_category_bags",
     alt: "Fashion bags selection for retail buyers",
     text: "Structured daily bags for buyers and boutiques.",
   },
@@ -74,33 +72,30 @@ const steps = [
 const productionCards = [
   {
     title: "Material Checking",
-    imageKey: "factory_01",
-    image: "/images/mock/factory-production-001.jpg",
+    imageKey: "home_img_factory_01",
     alt: "Factory preparation update",
     caption: "Selected materials and product details are reviewed before preparation.",
   },
   {
     title: "Production Updates",
-    imageKey: "factory_02",
-    image: "/images/mock/factory-production-002.jpg",
+    imageKey: "home_img_factory_02",
     alt: "Factory production update",
     caption: "Factory production and preparation updates are organized for buyer review.",
   },
   {
     title: "Packing Preparation",
-    imageKey: "factory_03",
-    image: "/images/mock/factory-production-003.jpg",
+    imageKey: "home_img_factory_03",
     alt: "Factory packing preparation",
     caption: "Orders are checked and packed carefully before dispatch.",
   },
 ];
 
-const newArrivalSlots: Array<{ category: ProductCategory; productCode: string }> = [
-  { category: "Apparel", productCode: "LM-APP-0158" },
-  { category: "Shoes", productCode: "LM-SHO-0157" },
-  { category: "Watches", productCode: "LM-WAT-0181" },
-  { category: "Bags", productCode: "LM-BAG-0195" },
-] as const;
+function buildNewArrivalSlots(featuredCodes: FeaturedCodes): Array<{ category: ProductCategory; productCode: string }> {
+  return HOME_FEATURED_SLOTS.map((slot) => ({
+    category: slot.category as ProductCategory,
+    productCode: featuredCodes[slot.key] || slot.fallback,
+  }));
+}
 
 type HomeProductRow = {
   product_code?: string | null;
@@ -150,7 +145,26 @@ function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
   };
 }
 
-async function getHomeNewArrivals() {
+async function getHomeNewArrivals(featuredCodes: FeaturedCodes) {
+  const newArrivalSlots = buildNewArrivalSlots(featuredCodes);
+
+  if (isD1WorkerProductSource()) {
+    const d1Products = await Promise.all(
+      newArrivalSlots.map(async (slot) => {
+        try {
+          const product = await getCatalogProductBySlugFromD1(slot.productCode);
+          return product?.main_thumbnail_url ? { product } : null;
+        } catch {
+          return null;
+        }
+      })
+    );
+    const selected = d1Products.filter((item): item is { product: CatalogProduct } => Boolean(item));
+    if (selected.length > 0) {
+      return selected;
+    }
+  }
+
   if (!supabaseUrl || !anonKey) {
     return [];
   }
@@ -195,23 +209,22 @@ async function getHomeNewArrivals() {
   }
 }
 
-const feedbackPreviewKeys = [
-  "customer_feedback_01",
-  "customer_feedback_02",
-  "customer_feedback_03",
-  "customer_feedback_04",
+// Feedback preview uses shipping proof images from homepage settings
+const feedbackPreviewImgKeys = [
+  "home_img_shipping_proof_01",
+  "home_img_shipping_proof_02",
+  "home_img_shipping_proof_03",
+  "home_img_shipping_proof_01", // intentional repeat for 4-column grid
 ] as const;
 
 export default async function Home() {
-  const [siteImages, settings, newProducts] = await Promise.all([
-    getSiteImages(),
-    getSiteSettings(),
-    getHomeNewArrivals(),
-  ]);
-  const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel;
-  const whatsappGroup = getSetting(settings, "whatsapp_group_url");
-  const instagram = getSetting(settings, "instagram_url") || siteConfig.instagramUrl;
-  const facebook = getSetting(settings, "facebook_url") || siteConfig.facebookUrl;
+  const homeSettings = await getHomepageSettings();
+  const newProducts = await getHomeNewArrivals(homeSettings.featuredCodes);
+
+  const telegram = homeSettings.social.telegram || siteConfig.telegramChannel;
+  const whatsappGroup = homeSettings.social.whatsapp;
+  const instagram = homeSettings.social.instagram || siteConfig.instagramUrl;
+  const facebook = homeSettings.social.facebook || siteConfig.facebookUrl;
   const socialLinks = [
     ["Telegram Group", telegram || "/contact"],
     ["WhatsApp Group", whatsappGroup || "/contact"],
@@ -259,8 +272,8 @@ export default async function Home() {
           </div>
           <div>
             <img
-              src={getImage(siteImages, "hero_main_image").url}
-              alt={getImage(siteImages, "hero_main_image").alt}
+              src={homeSettings.images["home_img_hero"]}
+              alt="Neutral fashion product composition for LM Dkbrand"
               className="aspect-[4/3] max-h-[440px] w-full rounded-xl object-cover"
               loading="eager"
               decoding="async"
@@ -279,8 +292,8 @@ export default async function Home() {
             {categoryCards.map((category) => (
               <article className="group overflow-hidden rounded-xl bg-white p-2" key={category.name}>
                 <img
-                  src={getImage(siteImages, category.imageKey).url || category.image}
-                  alt={getImage(siteImages, category.imageKey).alt || category.alt}
+                  src={homeSettings.images[category.imageKey]}
+                  alt={category.alt}
                   className="h-32 w-full rounded-lg object-cover sm:h-56 lg:h-64"
                   loading="lazy"
                   decoding="async"
@@ -351,8 +364,8 @@ export default async function Home() {
             {productionCards.map((item, index) => (
               <div className="overflow-hidden rounded-xl bg-paper" key={item.title}>
                 <img
-                  src={getImage(siteImages, item.imageKey).url || item.image}
-                  alt={getImage(siteImages, item.imageKey).alt || item.alt}
+                  src={homeSettings.images[item.imageKey]}
+                  alt={item.alt}
                   className="aspect-[4/3] w-full object-cover"
                   loading="lazy"
                   decoding="async"
@@ -453,19 +466,19 @@ export default async function Home() {
               </Link>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-3">
-              {feedbackPreviewKeys.map((key) => (
+              {feedbackPreviewImgKeys.map((imgKey, idx) => (
                 <Link
                   className="rounded-xl border border-line/70 bg-white p-1.5 transition hover:border-gold"
                   href="/shipping-proof"
-                  key={key}
+                  key={`${imgKey}-${idx}`}
                 >
                   <span className="block rounded-lg bg-paper p-1">
                     <img
-                      alt={getImage(siteImages, key).alt}
+                      alt="Buyer shipping proof and feedback"
                       className="h-44 w-full rounded-md object-contain sm:h-72 lg:h-80"
                       decoding="async"
                       loading="lazy"
-                      src={getImage(siteImages, key).url}
+                      src={homeSettings.images[imgKey]}
                     />
                   </span>
                 </Link>
