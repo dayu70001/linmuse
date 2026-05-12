@@ -5,6 +5,9 @@ import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { getHomepageSettings } from "@/lib/homepageSettings";
 
+// Render on every request so admin email changes (R2 settings JSON) appear immediately.
+export const dynamic = "force-dynamic";
+
 export default async function ContactPage() {
   const settings = await getHomepageSettings();
   const { telegram, whatsapp, instagram, facebook, email: settingsEmail } = settings.social;
