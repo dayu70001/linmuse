@@ -1,4 +1,4 @@
-import { Mail, PackageSearch, Send, Share2, Users } from "lucide-react";
+import { Mail, PackageSearch } from "lucide-react";
 import Link from "next/link";
 import { SafeEmailLink } from "@/components/SafeEmailLink";
 import { SectionHeading } from "@/components/SectionHeading";
@@ -25,32 +25,26 @@ export default async function ContactPage() {
     {
       title: "Telegram",
       text: "New arrivals, shipping proof, buyer updates, and brand announcements.",
-      icon: Send,
+      iconLabel: "TG",
       href: telegram_url,
     },
     {
       title: "WhatsApp",
       text: "Product updates and announcements when available.",
-      icon: Users,
+      iconLabel: "WA",
       href: whatsapp_url,
     },
     {
       title: "Instagram",
       text: "Selected product previews and visual updates.",
-      icon: Share2,
+      iconLabel: "IG",
       href: instagram_url,
     },
     {
       title: "Facebook",
       text: "Brand, catalog, and update posts.",
-      icon: Share2,
+      iconLabel: "FB",
       href: facebook_url,
-    },
-    {
-      title: "Email",
-      text: "For general business or support enquiries.",
-      icon: Mail,
-      href: `mailto:${email}`,
     },
   ];
 
@@ -65,11 +59,10 @@ export default async function ContactPage() {
           />
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {cards.map((card) => {
-              const Icon = card.icon;
               return (
                 <Link className="card p-6 transition hover:border-gold/80" href={card.href} key={card.title}>
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-paper">
-                    <Icon className="text-gold" size={24} />
+                    <span className="text-sm font-black tracking-tight text-gold">{card.iconLabel}</span>
                   </div>
                   <h2 className="mt-5 font-serif text-2xl text-ink">{card.title}</h2>
                   <p className="mt-3 max-w-md text-sm leading-6 text-muted">{card.text}</p>
@@ -91,19 +84,21 @@ export default async function ContactPage() {
                   Email
                 </SafeEmailLink>
               </div>
-              <Link
-                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold"
-                href="/track-order"
-              >
-                <PackageSearch size={17} />
-                Track Your Shipment
-              </Link>
-              <Link
-                className="ml-0 mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold sm:ml-3"
-                href="/catalog"
-              >
-                Browse Catalog
-              </Link>
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Link
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold"
+                  href="/track-order"
+                >
+                  <PackageSearch size={17} />
+                  Order Tracking
+                </Link>
+                <Link
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold"
+                  href="/catalog"
+                >
+                  Browse Catalog
+                </Link>
+              </div>
             </div>
             <div className="card bg-paper p-6">
               <h2 className="font-serif text-2xl text-ink">Order details</h2>

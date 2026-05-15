@@ -461,9 +461,6 @@ export default async function Home() {
                   Real buyer feedback is displayed with private information hidden.
                 </p>
               </div>
-              <Link className="btn-secondary w-full sm:w-auto" href="/shipping-proof">
-                View More Feedback
-              </Link>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-3">
               {feedbackPreviewImgKeys.map((imgKey, idx) => (
