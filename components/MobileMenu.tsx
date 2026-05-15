@@ -55,7 +55,7 @@ export default function MobileMenu({ telegramHref = '/contact' }: { telegramHref
               onClick={() => setOpen(false)}
               className="mt-1 rounded-2xl bg-neutral-900 px-4 py-4 text-center text-base font-semibold text-white active:bg-neutral-800"
             >
-              Join Telegram Group
+              Telegram Updates
             </Link>
           </div>
         </nav>

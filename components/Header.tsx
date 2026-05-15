@@ -32,7 +32,7 @@ export async function Header() {
 
         <Link className="btn-primary hidden md:inline-flex" href={telegram}>
           <Send size={16} />
-          Join Telegram Group
+          Telegram Updates
         </Link>
 
         <MobileMenu telegramHref={telegram} />

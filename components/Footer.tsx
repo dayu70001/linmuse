@@ -34,11 +34,11 @@ export async function Footer() {
         <div>
           <div className="font-serif text-2xl">{siteConfig.brandName}</div>
           <ul className="mt-4 grid max-w-md gap-1.5 text-sm leading-6 text-white/65">
-            <li>• Apparel, shoes, watches &amp; bags</li>
-            <li>• Selected lifestyle accessories</li>
-            <li>• Retail first · Wholesale available</li>
-            <li>• Flexible orders from single pieces</li>
-            <li>• Save product IDs before asking details</li>
+            <li>Apparel, shoes, watches &amp; bags</li>
+            <li>Selected lifestyle accessories</li>
+            <li>Retail first · Wholesale available</li>
+            <li>Flexible orders from single pieces</li>
+            <li>Save product IDs before asking details</li>
           </ul>
         </div>
         <div>
