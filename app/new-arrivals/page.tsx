@@ -40,7 +40,7 @@ export default async function NewArrivalsPage({
           <SectionHeading
             eyebrow="New arrivals"
             title="Latest Curated Products"
-            text="A focused view of newly selected apparel, shoes, watches, and bags for retail and wholesale buyers."
+            text="A focused view of the latest selected products for retail and wholesale buyers."
           />
           <Suspense fallback={null}>
             <CatalogGrid catalog={catalog} onlyNew />

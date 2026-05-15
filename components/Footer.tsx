@@ -6,12 +6,18 @@ export async function Footer() {
   const settings = await getHomepageSettings();
   const { telegram, whatsapp, instagram, facebook, email } = settings.social;
 
+  // Email click target uses R2 home_contact_email → siteConfig.email → support@linmuse.com.
+  // We keep the visible label as "Email" (no raw address text) to preserve anti-scrape, but
+  // the mailto: href reflects the current configured address.
+  const resolvedEmail = email || siteConfig.email || "support@linmuse.com";
+  const emailHref     = `mailto:${resolvedEmail}`;
+
   const contactLinks: [string, string][] = [
-    ["Telegram Group", telegram || siteConfig.telegramChannel || "/contact"],
-    ["WhatsApp Group", whatsapp || "/contact"],
+    ["Telegram",      telegram || siteConfig.telegramChannel || "/contact"],
+    ["WhatsApp",      whatsapp || "/contact"],
     ["Instagram",      instagram || siteConfig.instagramUrl || "/contact"],
     ["Facebook",       facebook || siteConfig.facebookUrl || "/contact"],
-    ["Email",          "/contact"],
+    ["Email",          emailHref],
   ];
 
   return (
@@ -20,7 +26,7 @@ export async function Footer() {
         <div>
           <div className="font-serif text-2xl">{siteConfig.brandName}</div>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/65">
-            {siteConfig.description}
+            Factory-direct fashion selections for retail and wholesale buyers. Orders start from 1 piece.
           </p>
         </div>
         <div>
@@ -35,7 +41,7 @@ export async function Footer() {
           </div>
         </div>
         <div>
-          <h3 className="text-sm font-bold text-gold">Follow Daily Updates</h3>
+          <h3 className="text-sm font-bold text-gold">Follow Official Channels</h3>
           <div className="mt-4 grid gap-3 text-sm text-white/70">
             {contactLinks.map(([label, href]) => (
               <Link href={href} key={label}>

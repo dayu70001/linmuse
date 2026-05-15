@@ -23,28 +23,34 @@ export default async function ContactPage() {
 
   const cards = [
     {
-      title: "Telegram Group",
-      text: "Join daily product updates, new arrivals, shipping proof, and buyer updates.",
+      title: "Telegram",
+      text: "New arrivals, shipping proof, buyer updates, and brand announcements.",
       icon: Send,
       href: telegram_url,
     },
     {
-      title: "WhatsApp Group",
-      text: "Use the group/community channel when available for product updates and announcements.",
+      title: "WhatsApp",
+      text: "Product updates and announcements when available.",
       icon: Users,
       href: whatsapp_url,
     },
     {
       title: "Instagram",
-      text: "Follow selected product previews and visual updates.",
+      text: "Selected product previews and visual updates.",
       icon: Share2,
       href: instagram_url,
     },
     {
       title: "Facebook",
-      text: "Follow brand and catalog updates.",
+      text: "Brand, catalog, and update posts.",
       icon: Share2,
       href: facebook_url,
+    },
+    {
+      title: "Email",
+      text: "For general business or support enquiries.",
+      icon: Mail,
+      href: `mailto:${email}`,
     },
   ];
 
@@ -54,8 +60,8 @@ export default async function ContactPage() {
         <div className="container-page">
           <SectionHeading
             eyebrow="Contact"
-            title="Follow and Contact LM Dkbrand"
-            text="Browse the catalog first, then save product IDs or screenshots before contacting our team through the available channels."
+            title="Official LM Dkbrand Channels"
+            text="Browse the catalog, save the product ID or screenshot, and send the details to your assigned sales contact. The channels below are used for official product updates, brand announcements, and buyer information."
           />
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {cards.map((card) => {
@@ -74,15 +80,15 @@ export default async function ContactPage() {
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="card p-6">
-              <h2 className="font-serif text-2xl text-ink">Customer Support</h2>
+              <h2 className="font-serif text-2xl text-ink">Buyer Notes</h2>
               <div className="mt-5 grid gap-3 text-sm font-semibold text-muted sm:grid-cols-2">
-                <Link href={telegram_url}>Telegram Group</Link>
-                <Link href={whatsapp_url}>WhatsApp Group</Link>
+                <Link href={telegram_url}>Telegram</Link>
+                <Link href={whatsapp_url}>WhatsApp</Link>
                 <Link href={instagram_url}>Instagram</Link>
                 <Link href={facebook_url}>Facebook</Link>
                 <SafeEmailLink user={emailUser} domain={emailDomain}>
                   <Mail className="mr-2 inline text-gold" size={16} />
-                  Email us
+                  Email
                 </SafeEmailLink>
               </div>
               <Link
@@ -90,15 +96,21 @@ export default async function ContactPage() {
                 href="/track-order"
               >
                 <PackageSearch size={17} />
-                Already ordered? Track your shipment
+                Track Your Shipment
+              </Link>
+              <Link
+                className="ml-0 mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-white px-5 text-sm font-bold text-ink transition hover:border-gold sm:ml-3"
+                href="/catalog"
+              >
+                Browse Catalog
               </Link>
             </div>
             <div className="card bg-paper p-6">
-              <h2 className="font-serif text-2xl text-ink">Catalog notes</h2>
+              <h2 className="font-serif text-2xl text-ink">Order details</h2>
               <div className="mt-4 grid gap-3 text-sm leading-6 text-muted">
-                <p>For retail orders, save product ID, size, color, and destination details.</p>
-                <p>For wholesale orders, prepare product IDs, quantity, size range, and destination country.</p>
-                <p className="font-semibold text-ink">Typical response time: within 24 hours.</p>
+                <p>For retail orders, save the product ID, size, color, and destination details.</p>
+                <p>For wholesale orders, prepare product IDs, quantities, size range, and destination country.</p>
+                <p>For placed orders, use the tracking page or send the tracking number to your assigned sales contact.</p>
               </div>
             </div>
           </div>

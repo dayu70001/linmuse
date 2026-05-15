@@ -1,8 +1,8 @@
 import { Camera, PackageCheck, Video } from "lucide-react";
-import Link from "next/link";
 import { FeedbackGallery } from "@/components/FeedbackGallery";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getHomepageSettings } from "@/lib/homepageSettings";
+import Link from "next/link";
 
 export default async function ShippingProofPage() {
   const settings = await getHomepageSettings();
@@ -32,10 +32,15 @@ export default async function ShippingProofPage() {
     },
   ];
 
+  // Customer Feedback gallery displays 6 distinct feedback images: shipping_proof_img_04..09.
+  // Top 3 proof cards use _01.._03; feedback uses _04.._09 — no image is reused.
   const feedbackImages = [
     { src: img["shipping_proof_img_04"] || "/images/mock/factory-production-001.jpg", alt: "Customer feedback 1" },
     { src: img["shipping_proof_img_05"] || "/images/mock/factory-production-002.jpg", alt: "Customer feedback 2" },
     { src: img["shipping_proof_img_06"] || "/images/mock/shipping-proof-003.jpg",     alt: "Customer feedback 3" },
+    { src: img["shipping_proof_img_07"] || "/images/mock/factory-production-001.jpg", alt: "Customer feedback 4" },
+    { src: img["shipping_proof_img_08"] || "/images/mock/factory-production-002.jpg", alt: "Customer feedback 5" },
+    { src: img["shipping_proof_img_09"] || "/images/mock/factory-production-003.jpg", alt: "Customer feedback 6" },
   ];
 
   return (
@@ -45,19 +50,11 @@ export default async function ShippingProofPage() {
           <SectionHeading
             eyebrow="Trust proof"
             title="Order & Shipping Proof"
-            text="Packing, dispatch, and warehouse updates help buyers review the order process."
+            text="Packing, dispatch, warehouse, and buyer feedback updates help customers review the order process before purchasing."
           />
           <p className="mx-auto mt-4 max-w-2xl rounded bg-paper px-4 py-3 text-center text-sm font-semibold text-muted">
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
-          <div className="mt-5 flex justify-center">
-            <Link
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
-              href="/track-order"
-            >
-              Track Your Order
-            </Link>
-          </div>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {proofSections.map((section) => {
               const Icon = section.icon;
@@ -93,6 +90,25 @@ export default async function ShippingProofPage() {
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
           <FeedbackGallery images={feedbackImages} />
+        </div>
+      </section>
+
+      <section className="py-10 sm:py-14">
+        <div className="container-page text-center">
+          <h2 className="font-serif text-3xl leading-tight text-ink sm:text-4xl">
+            Review more products
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-muted">
+            Browse the catalog and save the product IDs or screenshots you want to ask about.
+          </p>
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link className="btn-primary w-full sm:w-auto" href="/catalog">
+              Shop Catalog
+            </Link>
+            <Link className="btn-secondary w-full sm:w-auto" href="/new-arrivals">
+              View New Arrivals
+            </Link>
+          </div>
         </div>
       </section>
     </main>

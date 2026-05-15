@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { PackageSearch } from "lucide-react";
+import Link from "next/link";
 import type { TrackingFailure, TrackingResult } from "@/lib/tracking/types";
 
 type ApiState =
@@ -109,6 +110,10 @@ export default function TrackOrderPage() {
                 </button>
               </div>
             </label>
+            <p className="mt-4 text-sm leading-6 text-muted">
+              Tracking updates may take 24–48 hours after dispatch. If your tracking number does not show results,
+              please check again later or send the tracking number to your assigned sales contact.
+            </p>
           </form>
 
           {state.status === "error" ? (
@@ -121,7 +126,7 @@ export default function TrackOrderPage() {
             <section className="mt-8 rounded-2xl border border-line bg-paper p-6">
               <h2 className="font-serif text-2xl text-ink">We could not find tracking details yet.</h2>
               <p className="mt-3 text-sm leading-6 text-muted">
-                Please contact us on WhatsApp or Telegram for the latest status.
+                Please check again later or send the tracking number to your assigned sales contact.
               </p>
               <p className="mt-4 text-xs font-bold uppercase tracking-wide text-muted">
                 Tracking number: {result.tracking_number}
@@ -180,6 +185,15 @@ export default function TrackOrderPage() {
               </div>
             </section>
           ) : null}
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link className="btn-secondary w-full sm:w-auto" href="/catalog">
+              Back to Catalog
+            </Link>
+            <Link className="btn-primary w-full sm:w-auto" href="/shipping-proof">
+              View Shipping Proof
+            </Link>
+          </div>
         </div>
       </section>
     </main>
@@ -194,4 +208,3 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

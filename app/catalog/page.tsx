@@ -38,8 +38,8 @@ export default async function CatalogPage({
         <div className="container-page">
           <SectionHeading
             eyebrow="Catalog"
-            title="Shop Apparel, Shoes, Watches, Bags & Accessories"
-            text="Browse selected factory-direct products for retail and wholesale orders, from apparel, shoes, watches, bags, and selected lifestyle accessories. Search by product ID or title, then save the product ID or screenshot for later."
+            title="Shop Catalog"
+            text="Browse selected factory-direct fashion products for retail and wholesale orders. Search by product ID or title, then save the product ID or screenshot for your assigned sales contact."
           />
           <Suspense fallback={null}>
             <CatalogGrid catalog={catalog} />

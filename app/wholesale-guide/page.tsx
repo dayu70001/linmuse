@@ -1,4 +1,5 @@
 import { SectionHeading } from "@/components/SectionHeading";
+import Link from "next/link";
 
 const guideSections = [
   ["Retail Orders", "Browse products, save the product ID or screenshot, and prepare size, color, quantity, and destination details."],
@@ -6,7 +7,7 @@ const guideSections = [
   ["Orders from 1 Piece", "Retail and small orders can start from 1 piece. Larger reseller and boutique orders are also supported."],
   ["Delivery Time", "Most orders are delivered within 7-12 business days after confirmation, depending on product type, quantity, and destination."],
   ["Payment & Shipping", "Payment and shipping options are confirmed after product availability and destination details are reviewed."],
-  ["Product ID Process", "Save clear product IDs and contact our team. We will reply with current availability and next steps."],
+  ["Product ID Process", "Save clear product IDs, quantities, sizes, colors, and destination details, then send them to your assigned sales contact for availability and next steps."],
 ];
 
 export default function WholesaleGuidePage() {
@@ -29,6 +30,26 @@ export default function WholesaleGuidePage() {
                 <p className="mt-3 text-sm leading-6 text-muted">{text}</p>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-paper py-10 sm:py-14">
+        <div className="container-page text-center">
+          <h2 className="font-serif text-3xl leading-tight text-ink sm:text-4xl">
+            Ready to prepare an order?
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-muted">
+            Browse the catalog, save product IDs or screenshots, and prepare quantity, size, color, and destination
+            details before sending them to your assigned sales contact.
+          </p>
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link className="btn-primary w-full sm:w-auto" href="/catalog">
+              Shop Catalog
+            </Link>
+            <Link className="btn-secondary w-full sm:w-auto" href="/new-arrivals">
+              View New Arrivals
+            </Link>
           </div>
         </div>
       </section>

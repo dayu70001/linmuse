@@ -64,9 +64,9 @@ const features = [
 
 const steps = [
   "Browse selected products",
-  "Send product ID on WhatsApp",
-  "Confirm quantity, size, and destination",
-  "Get price, delivery, and order support",
+  "Save product ID or screenshot",
+  "Prepare quantity, size, color, and destination",
+  "Send details to your assigned sales contact",
 ];
 
 const productionCards = [
@@ -226,8 +226,8 @@ export default async function Home() {
   const instagram = homeSettings.social.instagram || siteConfig.instagramUrl;
   const facebook = homeSettings.social.facebook || siteConfig.facebookUrl;
   const socialLinks = [
-    ["Telegram Group", telegram || "/contact"],
-    ["WhatsApp Group", whatsappGroup || "/contact"],
+    ["Telegram", telegram || "/contact"],
+    ["WhatsApp", whatsappGroup || "/contact"],
     ["Instagram", instagram || "/contact"],
     ["Facebook", facebook || "/contact"],
   ];
@@ -245,8 +245,8 @@ export default async function Home() {
               Factory Direct Retail & Wholesale
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-muted sm:text-lg sm:leading-7">
-              Order from just 1 piece. Explore apparel, shoes, watches, and
-              bags, and selected lifestyle accessories with fast delivery in 7-12 business days.
+              Order from just 1 piece. Browse curated apparel, shoes, watches, bags, and selected lifestyle
+              accessories with factory-direct support and 7–12 business day delivery.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link className="btn-primary w-full sm:w-auto" href="/catalog">
@@ -258,7 +258,7 @@ export default async function Home() {
                 href={telegram || "/contact"}
               >
                 <Send size={18} />
-                Join Telegram Group
+                Telegram Updates
               </Link>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -515,8 +515,8 @@ export default async function Home() {
       <section className="section-pad bg-white">
         <div className="container-page text-center">
           <SectionHeading
-            title="Follow Daily Updates"
-            text="Join our groups for daily new arrivals, shipping proof, and buyer updates."
+            title="Follow Official Channels"
+            text="Follow new arrivals, shipping proof, buyer updates, and brand announcements through our official channels."
           />
           <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {socialLinks.map(([label, href]) => (
@@ -531,15 +531,17 @@ export default async function Home() {
       <section className="bg-ink py-10 text-white sm:py-14">
         <div className="container-page text-center">
           <h2 className="font-serif text-3xl leading-tight sm:text-5xl">
-            Ready to shop with LM Dkbrand?
+            Ready to browse LM Dkbrand?
           </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-white/70">
+            Explore selected products and save the product IDs or screenshots you want to ask about.
+          </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded border border-gold bg-gold px-5 py-3 text-sm font-bold text-ink sm:w-auto" href={telegram || "/contact"}>
-              <Send size={18} />
-              Join Telegram Group
-            </Link>
-            <Link className="inline-flex min-h-11 w-full items-center justify-center rounded border border-white/25 px-5 py-3 text-sm font-bold text-white sm:w-auto" href="/catalog">
+            <Link className="inline-flex min-h-11 w-full items-center justify-center rounded border border-gold bg-gold px-5 py-3 text-sm font-bold text-ink sm:w-auto" href="/catalog">
               Shop Catalog
+            </Link>
+            <Link className="inline-flex min-h-11 w-full items-center justify-center rounded border border-white/25 px-5 py-3 text-sm font-bold text-white sm:w-auto" href="/new-arrivals">
+              View New Arrivals
             </Link>
           </div>
         </div>
