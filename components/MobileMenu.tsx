@@ -8,10 +8,10 @@ const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/catalog', label: 'Catalog' },
   { href: '/new-arrivals', label: 'New Arrivals' },
-  { href: '/track-order', label: 'Track Order' },
+  { href: '/track-order', label: 'Order Tracking' },
   { href: '/shipping-proof', label: 'Shipping Proof' },
-  { href: '/wholesale-guide', label: 'Retail & Wholesale Guide' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/wholesale-guide', label: 'Order Guide' },
+  { href: '/contact', label: 'Official Channels' },
 ];
 
 export default function MobileMenu({ telegramHref = '/contact' }: { telegramHref?: string }) {

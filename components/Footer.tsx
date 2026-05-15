@@ -26,8 +26,6 @@ export async function Footer() {
     ["New Arrivals", "/new-arrivals"],
     ["Shipping Proof", "/shipping-proof"],
     ["Order Guide", "/wholesale-guide"],
-    ["Official Channels", "/contact"],
-    ["Order Tracking", "/track-order"],
   ];
 
   return (

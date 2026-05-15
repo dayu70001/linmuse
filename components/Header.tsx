@@ -4,6 +4,11 @@ import MobileMenu from "@/components/MobileMenu";
 import { siteConfig } from "@/config/site";
 import { getHomepageSettings } from "@/lib/homepageSettings";
 
+const navLabels: Record<string, string> = {
+  "Retail & Wholesale Guide": "Order Guide",
+  Contact: "Official Channels",
+};
+
 export async function Header() {
   const settings = await getHomepageSettings();
   const telegram = settings.social.telegram || siteConfig.telegramChannel || "/contact";
@@ -22,11 +27,11 @@ export async function Header() {
               href={item.href}
               key={item.href}
             >
-              {item.label}
+              {navLabels[item.label] || item.label}
             </Link>
           ))}
           <Link className="text-sm font-semibold text-muted transition hover:text-gold" href="/track-order">
-            Track Order
+            Order Tracking
           </Link>
         </nav>
 
