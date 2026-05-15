@@ -188,7 +188,7 @@ export function CatalogGrid({
           <span>{onlyNew ? "Latest arrivals" : `Page ${safePage} of ${activeCatalog.totalPages}`}</span>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5">
           {activeCatalog.products.map((product) => (
             <ProductCard key={product.product_code} product={product} />
           ))}

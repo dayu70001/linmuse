@@ -4,8 +4,8 @@ import { getCatalogProducts } from "@/lib/products";
 import { headers } from "next/headers";
 import { Suspense } from "react";
 
-function getPageSize(userAgent: string) {
-  return /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent) ? 20 : 25;
+function getPageSize(userAgent: string, mobileHint: string | null) {
+  return mobileHint === "?1" || /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent) ? 20 : 25;
 }
 
 export default async function CatalogPage({
@@ -29,7 +29,7 @@ export default async function CatalogPage({
     model: params?.model,
     search: params?.search,
     page: params?.page,
-    pageSize: getPageSize(headerList.get("user-agent") || ""),
+    pageSize: getPageSize(headerList.get("user-agent") || "", headerList.get("sec-ch-ua-mobile")),
   });
 
   return (

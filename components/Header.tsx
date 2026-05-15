@@ -2,11 +2,11 @@ import { Send } from "lucide-react";
 import Link from "next/link";
 import MobileMenu from "@/components/MobileMenu";
 import { siteConfig } from "@/config/site";
-import { getSiteSettings, getSetting } from "@/lib/siteData";
+import { getHomepageSettings } from "@/lib/homepageSettings";
 
 export async function Header() {
-  const settings = await getSiteSettings();
-  const telegram = getSetting(settings, "telegram_channel") || siteConfig.telegramChannel || "/contact";
+  const settings = await getHomepageSettings();
+  const telegram = settings.social.telegram || siteConfig.telegramChannel || "/contact";
 
   return (
     <header className="sticky top-0 z-[200] border-b border-[#E8E2D4] bg-white pointer-events-auto">
