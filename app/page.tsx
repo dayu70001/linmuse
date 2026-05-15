@@ -425,7 +425,7 @@ export default async function Home() {
             </p>
             <div className="mt-5 flex justify-center">
               <Link className="btn-primary w-full sm:w-auto" href="/shipping-proof">
-                View Shipping Proof
+                Shipping Proof
               </Link>
             </div>
           </div>
@@ -503,7 +503,7 @@ export default async function Home() {
           </div>
           <div className="mt-6 flex justify-center">
             <Link className="btn-secondary w-full sm:w-auto" href="/wholesale-guide">
-              Read Retail & Wholesale Guide
+              Order Guide
             </Link>
           </div>
         </div>
@@ -538,7 +538,7 @@ export default async function Home() {
               Shop Catalog
             </Link>
             <Link className="inline-flex min-h-11 w-full items-center justify-center rounded border border-white/25 px-5 py-3 text-sm font-bold text-white sm:w-auto" href="/new-arrivals">
-              View New Arrivals
+              New Arrivals
             </Link>
           </div>
         </div>
