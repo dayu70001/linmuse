@@ -6,6 +6,7 @@ import {
   HOME_IMAGE_SLOTS,
   HOME_SOCIAL_SLOTS,
   type HomeImageSlot,
+  type ShippingProofFeedbackItem,
 } from "@/lib/homepageSettings";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,14 @@ type SlotState = {
   uploading: boolean;
   status: string;
   error: string;
+};
+
+type FeedbackDraft = ShippingProofFeedbackItem & {
+  file?: File | null;
+  previewUrl?: string;
+  uploading?: boolean;
+  status?: string;
+  error?: string;
 };
 
 function emptySlot(url: string): SlotState {
@@ -124,6 +133,9 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
   );
   const [featuredMsg, setFeaturedMsg] = useState("");
   const [featuredErr, setFeaturedErr] = useState("");
+  const [gallery, setGallery] = useState<FeedbackDraft[]>([]);
+  const [galleryMsg, setGalleryMsg] = useState("");
+  const [galleryErr, setGalleryErr] = useState("");
 
   // Load current settings
   useEffect(() => {
@@ -135,27 +147,35 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
         });
         if (res.status === 401) { setLoadErr("管理员 Token 错误或未设置"); onUnauthorized(); return; }
         if (!res.ok) { setLoadErr("加载设置失败，请刷新重试。"); return; }
-        const data = (await res.json()) as { settings: Record<string, string> };
+        const data = (await res.json()) as { settings: Record<string, unknown> };
         const s = data.settings || {};
 
         setSlots((prev) => {
           const next = { ...prev };
           HOME_IMAGE_SLOTS.forEach((slot) => {
-            const url = s[slot.key] || slot.fallback;
+            const value = s[slot.key];
+            const url = typeof value === "string" && value ? value : slot.fallback;
             next[slot.key] = emptySlot(url);
           });
           return next;
         });
         setSocial((prev) => {
           const next = { ...prev };
-          HOME_SOCIAL_SLOTS.forEach((slot) => { next[slot.key] = s[slot.key] || ""; });
+          HOME_SOCIAL_SLOTS.forEach((slot) => {
+            const value = s[slot.key];
+            next[slot.key] = typeof value === "string" ? value : "";
+          });
           return next;
         });
         setFeatured((prev) => {
           const next = { ...prev };
-          HOME_FEATURED_SLOTS.forEach((slot) => { next[slot.key] = s[slot.key] || slot.fallback; });
+          HOME_FEATURED_SLOTS.forEach((slot) => {
+            const value = s[slot.key];
+            next[slot.key] = typeof value === "string" && value ? value : slot.fallback;
+          });
           return next;
         });
+        setGallery(normalizeGallery(s.shippingProofFeedbackGallery));
         setLoaded(true);
       } catch (err) {
         setLoadErr(String(err));
@@ -232,6 +252,97 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
       if (!res.ok || !json.ok) throw new Error(json.error || "保存失败");
       setFeaturedMsg("✓ 已保存，首页将显示这些商品。");
     } catch (err) { setFeaturedErr(String(err)); setFeaturedMsg(""); }
+  }
+
+  async function refreshLatestProducts() {
+    setFeaturedMsg("读取最新产品中…"); setFeaturedErr("");
+    try {
+      const res = await fetch("/api/admin/homepage-latest-products", {
+        headers: bearer(token),
+        cache: "no-store",
+      });
+      if (res.status === 401) { onUnauthorized(); return; }
+      const json = (await res.json()) as { ok?: boolean; latest?: Record<string, string>; error?: string };
+      if (!res.ok || !json.ok || !json.latest) throw new Error(json.error || "读取最新产品失败");
+      setFeatured((prev) => ({ ...prev, ...json.latest }));
+      setFeaturedMsg("✓ 已填入最新商品码，请点「保存商品码」发布。");
+    } catch (err) { setFeaturedErr(String(err)); setFeaturedMsg(""); }
+  }
+
+  function addGalleryFile(file?: File) {
+    if (!file) return;
+    const id = `feedback-${Date.now()}`;
+    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "webp";
+    const nextOrder = gallery.length > 0 ? Math.max(...gallery.map((item) => item.order)) + 1 : 1;
+    setGallery((prev) => [
+      ...prev,
+      {
+        id,
+        url: "",
+        r2Key: `site/shipping-proof/feedback-gallery/${id}.${ext}`,
+        label: `Customer feedback ${nextOrder}`,
+        order: nextOrder,
+        visible: true,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        status: "已选择图片，点「上传」后再保存图库。",
+      },
+    ]);
+  }
+
+  async function uploadGalleryItem(id: string) {
+    const item = gallery.find((entry) => entry.id === id);
+    if (!item?.file) return;
+    setGallery((prev) => prev.map((entry) => entry.id === id ? { ...entry, uploading: true, status: "上传中…", error: "" } : entry));
+    try {
+      const form = new FormData();
+      form.append("r2key", item.r2Key);
+      form.append("file", item.file);
+      const res = await fetch("/api/admin/homepage-upload", { method: "POST", headers: bearer(token), body: form });
+      if (res.status === 401) { onUnauthorized(); return; }
+      const json = (await res.json()) as { ok?: boolean; url?: string; error?: string };
+      if (!res.ok || !json.ok || !json.url) throw new Error(json.error || "上传失败");
+      setGallery((prev) => prev.map((entry) => entry.id === id
+        ? { ...entry, url: json.url || "", previewUrl: json.url || entry.previewUrl, file: null, uploading: false, status: "✓ 已上传，请保存图库。", error: "" }
+        : entry));
+    } catch (err) {
+      setGallery((prev) => prev.map((entry) => entry.id === id ? { ...entry, uploading: false, status: "", error: String(err) } : entry));
+    }
+  }
+
+  async function saveGallery() {
+    setGalleryMsg("保存中…"); setGalleryErr("");
+    try {
+      const cleanGallery = gallery
+        .filter((item) => item.url)
+        .map(({ id, url, r2Key, label, order, visible }) => ({ id, url, r2Key, label, order, visible }))
+        .sort((a, b) => a.order - b.order);
+      const res = await fetch("/api/admin/homepage-settings", {
+        method: "POST",
+        headers: { ...bearer(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ shippingProofFeedbackGallery: cleanGallery }),
+      });
+      if (res.status === 401) { onUnauthorized(); return; }
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || "保存失败");
+      setGallery(cleanGallery);
+      setGalleryMsg("✓ Customer Feedback Gallery 已保存。");
+    } catch (err) { setGalleryErr(String(err)); setGalleryMsg(""); }
+  }
+
+  function updateGalleryItem(id: string, patch: Partial<FeedbackDraft>) {
+    setGallery((prev) => prev.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  function moveGalleryItem(id: string, direction: -1 | 1) {
+    setGallery((prev) => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const index = sorted.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= sorted.length) return prev;
+      [sorted[index], sorted[target]] = [sorted[target], sorted[index]];
+      return sorted.map((item, orderIndex) => ({ ...item, order: orderIndex + 1 }));
+    });
   }
 
   // Group image slots by section
@@ -339,13 +450,99 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
             </div>
             {featuredMsg && <p className="mt-4 text-sm font-semibold text-muted">{featuredMsg}</p>}
             {featuredErr && <p className="mt-4 text-sm font-semibold text-red-600">{featuredErr}</p>}
-            <button className="btn-primary mt-5" onClick={saveFeatured} type="button">保存商品码</button>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button className="btn-secondary" onClick={refreshLatestProducts} type="button">Refresh Latest Products</button>
+              <button className="btn-primary" onClick={saveFeatured} type="button">保存商品码</button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── SHIPPING PROOF FEEDBACK GALLERY ───────────────────── */}
+        <section className="mt-14">
+          <h2 className="font-serif text-3xl text-ink">Customer Feedback Gallery</h2>
+          <p className="mt-1 text-sm text-muted">管理 /shipping-proof 页面里的反馈图片，可新增、排序、隐藏或删除。</p>
+          <div className="mt-5 rounded-xl border border-line bg-white p-6">
+            <label className="btn-secondary inline-flex cursor-pointer text-sm">
+              新增 feedback 图片
+              <input
+                accept="image/*"
+                className="hidden"
+                type="file"
+                onChange={(e) => addGalleryFile(e.target.files?.[0])}
+              />
+            </label>
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {[...gallery].sort((a, b) => a.order - b.order).map((item, index) => (
+                <div className="overflow-hidden rounded-xl border border-line bg-paper" key={item.id}>
+                  {(item.previewUrl || item.url) ? (
+                    <img alt={item.label} className="aspect-[4/3] w-full object-cover" src={item.previewUrl || item.url} />
+                  ) : (
+                    <div className="flex aspect-[4/3] items-center justify-center bg-white text-sm font-semibold text-muted">No image</div>
+                  )}
+                  <div className="grid gap-3 p-4">
+                    <label className="text-sm font-bold text-ink">
+                      Label
+                      <input
+                        className="mt-2 min-h-10 w-full rounded border border-line px-3 text-sm font-normal outline-none focus:border-gold"
+                        value={item.label}
+                        onChange={(e) => updateGalleryItem(item.id, { label: e.target.value })}
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-bold text-ink">
+                      <input
+                        checked={item.visible}
+                        type="checkbox"
+                        onChange={(e) => updateGalleryItem(item.id, { visible: e.target.checked })}
+                      />
+                      Visible
+                    </label>
+                    <p className="truncate text-xs text-muted">R2: {item.r2Key}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.file ? (
+                        <button className="btn-primary text-sm" disabled={item.uploading} onClick={() => uploadGalleryItem(item.id)} type="button">
+                          {item.uploading ? "上传中…" : "上传"}
+                        </button>
+                      ) : null}
+                      <button className="btn-secondary text-sm" disabled={index === 0} onClick={() => moveGalleryItem(item.id, -1)} type="button">上移</button>
+                      <button className="btn-secondary text-sm" disabled={index === gallery.length - 1} onClick={() => moveGalleryItem(item.id, 1)} type="button">下移</button>
+                      <button className="btn-secondary text-sm" onClick={() => setGallery((prev) => prev.filter((entry) => entry.id !== item.id))} type="button">删除</button>
+                    </div>
+                    {item.status && <p className="text-xs font-semibold text-muted">{item.status}</p>}
+                    {item.error && <p className="text-xs font-semibold text-red-600">{item.error}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {galleryMsg && <p className="mt-4 text-sm font-semibold text-muted">{galleryMsg}</p>}
+            {galleryErr && <p className="mt-4 text-sm font-semibold text-red-600">{galleryErr}</p>}
+            <button className="btn-primary mt-5" onClick={saveGallery} type="button">保存 Gallery</button>
           </div>
         </section>
 
       </div>
     </main>
   );
+}
+
+function normalizeGallery(value: unknown): FeedbackDraft[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index): FeedbackDraft | null => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const url = typeof row.url === "string" ? row.url : "";
+      if (!url) return null;
+      return {
+        id: typeof row.id === "string" && row.id ? row.id : `feedback-${index + 1}`,
+        url,
+        r2Key: typeof row.r2Key === "string" ? row.r2Key : "",
+        label: typeof row.label === "string" && row.label ? row.label : `Customer feedback ${index + 1}`,
+        order: Number.isFinite(Number(row.order)) ? Number(row.order) : index + 1,
+        visible: row.visible !== false,
+      };
+    })
+    .filter((item): item is FeedbackDraft => Boolean(item))
+    .sort((a, b) => a.order - b.order);
 }
 
 // ---------------------------------------------------------------------------

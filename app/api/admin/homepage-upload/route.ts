@@ -28,8 +28,9 @@ export async function POST(req: Request) {
   const r2Key      = (formData.get("r2key") as string | null)?.trim() ?? "";
   const file       = formData.get("file") as File | null;
 
-  if (!r2Key)                      return NextResponse.json({ error: "Missing r2key" },              { status: 400 });
-  if (!ALLOWED_R2_KEYS.has(r2Key)) return NextResponse.json({ error: `r2key not allowed: ${r2Key}` },{ status: 400 });
+  const isFeedbackGalleryKey = /^site\/shipping-proof\/feedback-gallery\/[a-zA-Z0-9._-]+\.(webp|jpg|jpeg|png)$/i.test(r2Key);
+  if (!r2Key)                                         return NextResponse.json({ error: "Missing r2key" },              { status: 400 });
+  if (!ALLOWED_R2_KEYS.has(r2Key) && !isFeedbackGalleryKey) return NextResponse.json({ error: `r2key not allowed: ${r2Key}` },{ status: 400 });
   if (!file || file.size === 0)    return NextResponse.json({ error: "Missing or empty file" },      { status: 400 });
   if (file.size > 8 * 1024 * 1024) return NextResponse.json({ error: "File too large (max 8 MB)" }, { status: 400 });
 
@@ -50,6 +51,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Image upload failed: ${String(err)}` }, { status: 502 });
   }
 
+  // Cache-bust: append ?v=<timestamp> so the CDN treats every re-upload as a new URL.
+  // The R2 object key itself is unchanged (overwrites in place); only the URL stored
+  // in the settings JSON gains a fresh query string each upload. Applies uniformly to
+  // all 9 shipping-proof slots and every site/home/* image — no render-side change.
+  const versionedUrl = `${imageUrl}?v=${Date.now()}`;
+
   // ── 2. Update settings JSON in R2 ────────────────────────────────────────
   const settingsKey = R2_KEY_TO_SETTINGS_KEY.get(r2Key);
   let settingsError: string | null = null;
@@ -58,7 +65,7 @@ export async function POST(req: Request) {
     try {
       // getR2Json reads directly from R2 — no CDN cache
       const existing = (await getR2Json<Record<string, string>>(SETTINGS_R2_KEY)) ?? {};
-      await uploadJsonToR2(SETTINGS_R2_KEY, { ...existing, [settingsKey]: imageUrl });
+      await uploadJsonToR2(SETTINGS_R2_KEY, { ...existing, [settingsKey]: versionedUrl });
     } catch (err) {
       // Settings update failed — report it but don't fail the whole response
       settingsError = String(err);
@@ -67,7 +74,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    url: imageUrl,
+    url: versionedUrl,
     r2Key,
     settingsKey: settingsKey ?? null,
     settingsUpdated: settingsKey ? settingsError === null : null,

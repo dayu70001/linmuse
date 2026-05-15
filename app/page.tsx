@@ -214,7 +214,7 @@ const feedbackPreviewImgKeys = [
   "home_img_shipping_proof_01",
   "home_img_shipping_proof_02",
   "home_img_shipping_proof_03",
-  "home_img_shipping_proof_01", // intentional repeat for 4-column grid
+  "home_img_shipping_proof_04",
 ] as const;
 
 export default async function Home() {

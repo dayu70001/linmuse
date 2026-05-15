@@ -1,8 +1,8 @@
 import { Camera, PackageCheck, Video } from "lucide-react";
-import { FeedbackGallery } from "@/components/FeedbackGallery";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getHomepageSettings } from "@/lib/homepageSettings";
 import Link from "next/link";
+import { ShippingProofFeedbackGallery } from "./FeedbackGallery";
 
 export default async function ShippingProofPage() {
   const settings = await getHomepageSettings();
@@ -32,16 +32,19 @@ export default async function ShippingProofPage() {
     },
   ];
 
-  // Customer Feedback gallery displays 6 distinct feedback images: shipping_proof_img_04..09.
-  // Top 3 proof cards use _01.._03; feedback uses _04.._09 — no image is reused.
-  const feedbackImages = [
+  const defaultFeedbackImages = [
     { src: img["shipping_proof_img_04"] || "/images/mock/factory-production-001.jpg", alt: "Customer feedback 1" },
     { src: img["shipping_proof_img_05"] || "/images/mock/factory-production-002.jpg", alt: "Customer feedback 2" },
     { src: img["shipping_proof_img_06"] || "/images/mock/shipping-proof-003.jpg",     alt: "Customer feedback 3" },
-    { src: img["shipping_proof_img_07"] || "/images/mock/factory-production-001.jpg", alt: "Customer feedback 4" },
-    { src: img["shipping_proof_img_08"] || "/images/mock/factory-production-002.jpg", alt: "Customer feedback 5" },
-    { src: img["shipping_proof_img_09"] || "/images/mock/factory-production-003.jpg", alt: "Customer feedback 6" },
+    { src: img["shipping_proof_img_07"] || "/images/mock/hero-apparel-1.jpg",          alt: "Customer feedback 4" },
+    { src: img["shipping_proof_img_08"] || "/images/mock/hero-shoes-1.jpg",            alt: "Customer feedback 5" },
+    { src: img["shipping_proof_img_09"] || "/images/mock/product-watches-001.jpg",     alt: "Customer feedback 6" },
   ];
+  const customFeedbackImages = settings.shippingProofFeedbackGallery
+    .filter((item) => item.visible)
+    .sort((a, b) => a.order - b.order)
+    .map((item) => ({ src: item.url, alt: item.label }));
+  const feedbackImages = customFeedbackImages.length > 0 ? customFeedbackImages : defaultFeedbackImages;
 
   return (
     <main className="bg-white">
@@ -89,7 +92,7 @@ export default async function ShippingProofPage() {
           <p className="mx-auto mt-4 max-w-2xl rounded bg-white px-4 py-3 text-center text-sm font-semibold text-muted">
             Customer names, phone numbers, addresses, payment details, and tracking numbers are hidden for privacy.
           </p>
-          <FeedbackGallery images={feedbackImages} />
+          <ShippingProofFeedbackGallery images={feedbackImages} />
         </div>
       </section>
 

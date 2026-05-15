@@ -31,6 +31,7 @@ export const HOME_IMAGE_SLOTS: HomeImageSlot[] = [
   { key: "home_img_shipping_proof_01",     r2Key: "site/home/shipping-proof-01.webp", label: "Shipping Proof 1", section: "Shipping Proof", fallback: "/images/mock/shipping-proof-001.jpg"    },
   { key: "home_img_shipping_proof_02",     r2Key: "site/home/shipping-proof-02.webp", label: "Shipping Proof 2", section: "Shipping Proof", fallback: "/images/mock/shipping-proof-002.jpg"    },
   { key: "home_img_shipping_proof_03",     r2Key: "site/home/shipping-proof-03.webp", label: "Shipping Proof 3", section: "Shipping Proof", fallback: "/images/mock/shipping-proof-003.jpg"    },
+  { key: "home_img_shipping_proof_04",     r2Key: "site/home/shipping-proof-04.webp", label: "Shipping Proof 4", section: "Shipping Proof", fallback: "/images/mock/factory-production-001.jpg"},
   // ── Shipping Proof PAGE (/shipping-proof) ───────────────────────────────
   { key: "shipping_proof_img_01", r2Key: "site/shipping-proof/proof-01.webp", label: "Proof Page — Packing Photos",     section: "Shipping Proof Page", fallback: "/images/mock/shipping-proof-001.jpg"     },
   { key: "shipping_proof_img_02", r2Key: "site/shipping-proof/proof-02.webp", label: "Proof Page — Shipping Updates",   section: "Shipping Proof Page", fallback: "/images/mock/shipping-proof-002.jpg"     },
@@ -38,6 +39,9 @@ export const HOME_IMAGE_SLOTS: HomeImageSlot[] = [
   { key: "shipping_proof_img_04", r2Key: "site/shipping-proof/proof-04.webp", label: "Proof Page — Feedback Photo 1",  section: "Shipping Proof Page", fallback: "/images/mock/factory-production-001.jpg" },
   { key: "shipping_proof_img_05", r2Key: "site/shipping-proof/proof-05.webp", label: "Proof Page — Feedback Photo 2",  section: "Shipping Proof Page", fallback: "/images/mock/factory-production-002.jpg" },
   { key: "shipping_proof_img_06", r2Key: "site/shipping-proof/proof-06.webp", label: "Proof Page — Feedback Photo 3",  section: "Shipping Proof Page", fallback: "/images/mock/shipping-proof-003.jpg"     },
+  { key: "shipping_proof_img_07", r2Key: "site/shipping-proof/proof-07.webp", label: "Proof Page — Feedback Photo 4",  section: "Shipping Proof Page", fallback: "/images/mock/hero-apparel-1.jpg"          },
+  { key: "shipping_proof_img_08", r2Key: "site/shipping-proof/proof-08.webp", label: "Proof Page — Feedback Photo 5",  section: "Shipping Proof Page", fallback: "/images/mock/hero-shoes-1.jpg"            },
+  { key: "shipping_proof_img_09", r2Key: "site/shipping-proof/proof-09.webp", label: "Proof Page — Feedback Photo 6",  section: "Shipping Proof Page", fallback: "/images/mock/product-watches-001.jpg"     },
 ];
 
 export type HomeFeaturedSlot = {
@@ -75,6 +79,7 @@ export const HOME_ALLOWED_KEYS = new Set([
   ...HOME_IMAGE_SLOTS.map((s) => s.key),
   ...HOME_FEATURED_SLOTS.map((s) => s.key),
   ...HOME_SOCIAL_SLOTS.map((s) => s.key),
+  "shippingProofFeedbackGallery",
 ]);
 
 // r2Key → settings key  (upload route updates JSON after each image upload)
@@ -112,6 +117,16 @@ export type HomepageSettings = {
     whatsappRetail:    string;
     whatsappWholesale: string;
   };
+  shippingProofFeedbackGallery: ShippingProofFeedbackItem[];
+};
+
+export type ShippingProofFeedbackItem = {
+  id: string;
+  url: string;
+  r2Key: string;
+  label: string;
+  order: number;
+  visible: boolean;
 };
 
 /**
@@ -121,29 +136,58 @@ export type HomepageSettings = {
  */
 export async function getHomepageSettings(): Promise<HomepageSettings> {
   // Direct R2 read — getR2Json uses SigV4, no CDN
-  const raw = (await getR2Json<Record<string, string>>(SETTINGS_R2_KEY)) ?? {};
+  const raw = (await getR2Json<Record<string, unknown>>(SETTINGS_R2_KEY)) ?? {};
 
   const images: Record<string, string> = {};
   for (const slot of HOME_IMAGE_SLOTS) {
-    images[slot.key] = raw[slot.key] || slot.fallback;
+    const value = raw[slot.key];
+    images[slot.key] = typeof value === "string" && value ? value : slot.fallback;
   }
 
   const featuredCodes: Record<string, string> = {};
   for (const slot of HOME_FEATURED_SLOTS) {
-    featuredCodes[slot.key] = raw[slot.key] || slot.fallback;
+    const value = raw[slot.key];
+    featuredCodes[slot.key] = typeof value === "string" && value ? value : slot.fallback;
   }
+
+  const storedGallery = Array.isArray(raw.shippingProofFeedbackGallery)
+    ? raw.shippingProofFeedbackGallery
+    : [];
+  const shippingProofFeedbackGallery = storedGallery
+    .map((item, index): ShippingProofFeedbackItem | null => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const url = typeof row.url === "string" ? row.url : "";
+      if (!url) return null;
+      return {
+        id: typeof row.id === "string" && row.id ? row.id : `feedback-${index + 1}`,
+        url,
+        r2Key: typeof row.r2Key === "string" ? row.r2Key : "",
+        label: typeof row.label === "string" && row.label ? row.label : `Customer feedback ${index + 1}`,
+        order: Number.isFinite(Number(row.order)) ? Number(row.order) : index + 1,
+        visible: row.visible !== false,
+      };
+    })
+    .filter((item): item is ShippingProofFeedbackItem => Boolean(item))
+    .sort((a, b) => a.order - b.order);
 
   return {
     images,
     featuredCodes,
     social: {
-      telegram:          raw["home_link_telegram"]      || "",
-      whatsapp:          raw["home_link_whatsapp"]      || "",
-      instagram:         raw["home_link_instagram"]     || "",
-      facebook:          raw["home_link_facebook"]      || "",
-      email:             raw["home_contact_email"]      || "",
-      whatsappRetail:    raw["home_whatsapp_retail"]    || "",
-      whatsappWholesale: raw["home_whatsapp_wholesale"] || "",
+      telegram:          getString(raw, "home_link_telegram"),
+      whatsapp:          getString(raw, "home_link_whatsapp"),
+      instagram:         getString(raw, "home_link_instagram"),
+      facebook:          getString(raw, "home_link_facebook"),
+      email:             getString(raw, "home_contact_email"),
+      whatsappRetail:    getString(raw, "home_whatsapp_retail"),
+      whatsappWholesale: getString(raw, "home_whatsapp_wholesale"),
     },
+    shippingProofFeedbackGallery,
   };
+}
+
+function getString(raw: Record<string, unknown>, key: string) {
+  const value = raw[key];
+  return typeof value === "string" ? value : "";
 }
