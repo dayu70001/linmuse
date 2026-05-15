@@ -21,6 +21,10 @@ export function ShippingProofFeedbackGallery({ images }: { images: FeedbackImage
     });
   }
 
+  function getShowMoreCount() {
+    return window.matchMedia("(min-width: 768px)").matches ? 3 : 2;
+  }
+
   return (
     <>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4">
@@ -48,7 +52,7 @@ export function ShippingProofFeedbackGallery({ images }: { images: FeedbackImage
         <div className="mt-7 flex justify-center">
           <button
             className="btn-secondary"
-            onClick={() => setVisibleCount((count) => Math.min(count + 2, images.length))}
+            onClick={() => setVisibleCount((count) => Math.min(count + getShowMoreCount(), images.length))}
             type="button"
           >
             Show More Feedback

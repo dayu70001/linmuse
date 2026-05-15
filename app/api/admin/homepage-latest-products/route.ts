@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
-import { HOME_FEATURED_SLOTS } from "@/lib/homepageSettings";
+import { HOME_FEATURED_SLOTS, SETTINGS_R2_KEY } from "@/lib/homepageSettings";
 import { getCatalogProducts } from "@/lib/products";
+import { getR2Json, uploadJsonToR2 } from "@/lib/r2Upload";
 
 function authorized(req: Request): boolean {
   const token = process.env.ADMIN_TOKEN;
   if (!token) return false;
   const header = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
   return header === token;
+}
+
+function newestTime(product: { imported_at?: string | null; created_at?: string | null }) {
+  return Date.parse(product.imported_at || product.created_at || "") || 0;
 }
 
 export async function GET(req: Request) {
@@ -22,10 +27,10 @@ export async function GET(req: Request) {
       const catalog = await getCatalogProducts({
         category: slot.category,
         page: 1,
-        pageSize: 1,
+        pageSize: 20,
         onlyNew: true,
       });
-      const product = catalog.products[0] || null;
+      const product = [...catalog.products].sort((a, b) => newestTime(b) - newestTime(a))[0] || null;
       if (product?.product_code) {
         latest[slot.key] = product.product_code;
         products[slot.key] = {
@@ -39,6 +44,9 @@ export async function GET(req: Request) {
       }
     }),
   );
+
+  const existing = (await getR2Json<Record<string, unknown>>(SETTINGS_R2_KEY)) ?? {};
+  await uploadJsonToR2(SETTINGS_R2_KEY, { ...existing, ...latest });
 
   return NextResponse.json({ ok: true, latest, products });
 }

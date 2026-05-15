@@ -264,8 +264,9 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
       if (res.status === 401) { onUnauthorized(); return; }
       const json = (await res.json()) as { ok?: boolean; latest?: Record<string, string>; error?: string };
       if (!res.ok || !json.ok || !json.latest) throw new Error(json.error || "读取最新产品失败");
-      setFeatured((prev) => ({ ...prev, ...json.latest }));
-      setFeaturedMsg("✓ 已填入最新商品码，请点「保存商品码」发布。");
+      const nextFeatured = { ...featured, ...json.latest };
+      setFeatured(nextFeatured);
+      setFeaturedMsg("Latest products refreshed and saved.");
     } catch (err) { setFeaturedErr(String(err)); setFeaturedMsg(""); }
   }
 
@@ -452,7 +453,7 @@ function Editor({ token, onUnauthorized }: { token: string; onUnauthorized: () =
             {featuredErr && <p className="mt-4 text-sm font-semibold text-red-600">{featuredErr}</p>}
             <div className="mt-5 flex flex-wrap gap-3">
               <button className="btn-secondary" onClick={refreshLatestProducts} type="button">Refresh Latest Products</button>
-              <button className="btn-primary" onClick={saveFeatured} type="button">保存商品码</button>
+              <button className="btn-primary" onClick={saveFeatured} type="button">Save Manual Codes</button>
             </div>
           </div>
         </section>

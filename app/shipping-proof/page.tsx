@@ -44,7 +44,7 @@ export default async function ShippingProofPage() {
     .filter((item) => item.visible)
     .sort((a, b) => a.order - b.order)
     .map((item) => ({ src: item.url, alt: item.label }));
-  const feedbackImages = customFeedbackImages.length > 0 ? customFeedbackImages : defaultFeedbackImages;
+  const feedbackImages = [...defaultFeedbackImages, ...customFeedbackImages];
 
   return (
     <main className="bg-white">
