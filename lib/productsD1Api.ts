@@ -12,6 +12,7 @@ import type {
   CatalogFilterOptions,
   CatalogProduct,
   CatalogProductsResult,
+  CatalogSeoContent,
 } from "@/lib/products";
 
 type D1ListProduct = {
@@ -26,6 +27,28 @@ type D1ListProduct = {
   color?: string | null;
   main_thumbnail_url?: string | null;
   imported_at?: string | null;
+  // Cleaned display title joined from product_seo_content. null when no SEO
+  // row has been published for this product yet — the list card then falls
+  // back to `title` (products.title from D1).
+  seo_display_title?: string | null;
+};
+
+type D1SeoContentRaw = {
+  display_title?: string | null;
+  short_subtitle?: string | null;
+  product_overview?: string | null;
+  material_details?: string[] | null;
+  size_note?: string | null;
+  care_note?: string | null;
+  order_information?: string[] | null;
+  how_to_ask?: string | null;
+  service_note?: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  image_alt?: string | null;
+  content_status?: string | null;
+  content_version?: string | null;
+  updated_at?: string | null;
 };
 
 type D1DetailProduct = D1ListProduct & {
@@ -36,6 +59,7 @@ type D1DetailProduct = D1ListProduct & {
   created_at?: string | null;
   status?: string | null;
   is_active?: boolean | number | null;
+  seo_content?: D1SeoContentRaw | null;
 };
 
 type D1CatalogResponse = {
@@ -154,6 +178,52 @@ function sortModels(models: string[]) {
   );
 }
 
+function mapSeoContent(raw: D1SeoContentRaw | null | undefined): CatalogSeoContent | null {
+  if (!raw || typeof raw !== "object") return null;
+  const display = clean(raw.display_title);
+  if (!display) return null; // worker returns null when no row was joined
+  const arr = (v: string[] | null | undefined): string[] => Array.isArray(v) ? v.map((s) => clean(s)).filter(Boolean) : [];
+  return {
+    display_title: display,
+    short_subtitle: clean(raw.short_subtitle),
+    product_overview: clean(raw.product_overview),
+    material_details: arr(raw.material_details),
+    size_note: clean(raw.size_note),
+    care_note: clean(raw.care_note),
+    order_information: arr(raw.order_information),
+    how_to_ask: clean(raw.how_to_ask),
+    service_note: clean(raw.service_note),
+    seo_title: clean(raw.seo_title),
+    seo_description: clean(raw.seo_description),
+    image_alt: clean(raw.image_alt),
+    content_status: clean(raw.content_status) || undefined,
+    content_version: clean(raw.content_version) || undefined,
+    updated_at: clean(raw.updated_at) || undefined,
+  };
+}
+
+// Build a CatalogSeoContent partial from a list row that only carries one column
+// (seo_display_title). The other fields are filled in for the type but unused by
+// card components — `display_title` is the only thing list cards need.
+function mapListSeoContent(row: D1ListProduct): CatalogSeoContent | null {
+  const display = clean(row.seo_display_title || "");
+  if (!display) return null;
+  return {
+    display_title: display,
+    short_subtitle: "",
+    product_overview: "",
+    material_details: [],
+    size_note: "",
+    care_note: "",
+    order_information: [],
+    how_to_ask: "",
+    service_note: "",
+    seo_title: "",
+    seo_description: "",
+    image_alt: "",
+  };
+}
+
 function mapD1Product(row: D1ListProduct | D1DetailProduct): CatalogProduct {
   const gallery = normalizeArray((row as D1DetailProduct).gallery_image_urls);
   const thumbnails = normalizeArray((row as D1DetailProduct).gallery_thumbnail_urls);
@@ -185,6 +255,10 @@ function mapD1Product(row: D1ListProduct | D1DetailProduct): CatalogProduct {
     badge: "New",
     imported_at: clean(row.imported_at) || null,
     created_at: clean((row as D1DetailProduct).created_at) || null,
+    // Detail responses carry a full seo_content bundle; list responses carry
+    // only seo_display_title. Prefer the bundle when present, fall back to the
+    // partial built from the single list column.
+    seo_content: mapSeoContent((row as D1DetailProduct).seo_content) || mapListSeoContent(row as D1ListProduct),
   };
 }
 

@@ -17,6 +17,27 @@ import {
   isD1WorkerProductSource,
 } from "@/lib/productsD1Api";
 
+// Short-card content joined from product_seo_content (separate D1 table).
+// Always optional — when null/undefined the front-end falls back to the legacy
+// title / description fields. Never overwrites any products.* column.
+export type CatalogSeoContent = {
+  display_title: string;
+  short_subtitle: string;
+  product_overview: string;
+  material_details: string[];
+  size_note: string;
+  care_note: string;
+  order_information: string[];
+  how_to_ask: string;
+  service_note: string;
+  seo_title: string;
+  seo_description: string;
+  image_alt: string;
+  content_status?: string;
+  content_version?: string;
+  updated_at?: string;
+};
+
 export type CatalogProduct = {
   id?: string;
   product_code: string;
@@ -43,6 +64,7 @@ export type CatalogProduct = {
   badge?: ProductBadge;
   imported_at?: string | null;
   created_at?: string | null;
+  seo_content?: CatalogSeoContent | null;
 };
 
 export type CatalogFilters = {

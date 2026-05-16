@@ -9,7 +9,15 @@ export function ProductCard({
   imageOverride?: string;
 }) {
   const productCode = "product_code" in product ? product.product_code : product.id;
-  const title = "title_en" in product ? product.title_en : product.title;
+  // Prefer the cleaned SEO display_title when a product_seo_content row exists
+  // for this product. Falls back to the original title_en / title otherwise so
+  // products that haven't been published through the SEO panel keep working.
+  const seoDisplayTitle =
+    "seo_content" in product && product.seo_content && product.seo_content.display_title
+      ? product.seo_content.display_title
+      : "";
+  const baseTitle = "title_en" in product ? product.title_en : product.title;
+  const title = seoDisplayTitle || baseTitle;
   const mainImage = imageOverride || ("main_thumbnail_url" in product ? product.main_thumbnail_url || "" : product.mainImage);
 
   return (
