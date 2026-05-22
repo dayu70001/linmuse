@@ -99,8 +99,15 @@ function newestTime(product: CatalogProduct) {
   return Date.parse(product.imported_at || product.created_at || "") || 0;
 }
 
+function productCodeNumber(product: CatalogProduct) {
+  const match = String(product.product_code || "").match(/^LM-(APP|BAG|SHO|ACC|WAT)-(\d+)$/);
+  return match ? Number(match[2]) : 0;
+}
+
 function sortNewestProducts(products: CatalogProduct[]) {
   return [...products].sort((a, b) => {
+    const codeDiff = productCodeNumber(b) - productCodeNumber(a);
+    if (codeDiff !== 0) return codeDiff;
     const timeDiff = newestTime(b) - newestTime(a);
     if (timeDiff !== 0) return timeDiff;
     return String(b.product_code || "").localeCompare(String(a.product_code || ""));
@@ -149,12 +156,30 @@ function normalizeArray(value: unknown): string[] {
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
     cache: "no-store",
+    signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(`D1 product API failed: ${response.status}${text ? ` ${text.slice(0, 240)}` : ""}`);
   }
   return response.json() as Promise<T>;
+}
+
+function emptyD1CatalogResult(
+  page: number,
+  pageSize: number,
+  filters: CatalogActiveFilters,
+  filterOptions: CatalogFilterOptions,
+): CatalogProductsResult {
+  return {
+    products: [],
+    total: 0,
+    page: Math.max(1, page),
+    pageSize,
+    totalPages: 1,
+    filters,
+    filterOptions,
+  };
 }
 
 function queryString(params: Record<string, string | number | null | undefined>) {
@@ -282,10 +307,10 @@ export async function getD1FilterOptions(category = ALL_CATEGORY): Promise<Catal
   const requestedCategory = cleanTaxonomyValue(category || "") || ALL_CATEGORY;
   const categoryQuery = requestedCategory !== ALL_CATEGORY ? queryString({ category: requestedCategory }) : "";
   const [allFilters, categoryFilters] = await Promise.all([
-    fetchJson<D1FiltersResponse>("/filters"),
+    fetchJson<D1FiltersResponse>("/filters").catch((): D1FiltersResponse => ({})),
     requestedCategory === ALL_CATEGORY
       ? Promise.resolve<D1FiltersResponse>({})
-      : fetchJson<D1FiltersResponse>(`/filters${categoryQuery}`),
+      : fetchJson<D1FiltersResponse>(`/filters${categoryQuery}`).catch((): D1FiltersResponse => ({})),
   ]);
   const categories = [ALL_CATEGORY, ...sortCategories((allFilters.categories || []).filter(Boolean))];
   const activeCategory = categories.includes(requestedCategory) ? requestedCategory : ALL_CATEGORY;
@@ -357,19 +382,28 @@ export async function getCatalogProductsFromD1(filters: CatalogFilters = {}): Pr
   const initialOptions = await getD1FilterOptions(clean(filters.category) || ALL_CATEGORY);
   const normalized = normalizeActiveFilters(filters, initialOptions);
   if (filters.onlyNew) {
-    return getLimitedNewArrivalsFromD1(page, pageSize, initialOptions, normalized);
+    try {
+      return await getLimitedNewArrivalsFromD1(page, pageSize, initialOptions, normalized);
+    } catch {
+      return emptyD1CatalogResult(page, pageSize, normalized, initialOptions);
+    }
   }
 
   const endpoint = filters.onlyNew ? "/latest" : "/catalog";
-  const response = await fetchJson<D1CatalogResponse>(`${endpoint}${queryString({
-    category: normalized.category,
-    subcategory: filters.onlyNew ? "" : normalized.subcategory,
-    brand: filters.onlyNew ? "" : normalized.brand,
-    model: filters.onlyNew ? "" : normalized.model,
-    search: filters.onlyNew ? "" : normalized.search,
-    page,
-    pageSize,
-  })}`);
+  let response: D1CatalogResponse;
+  try {
+    response = await fetchJson<D1CatalogResponse>(`${endpoint}${queryString({
+      category: normalized.category,
+      subcategory: filters.onlyNew ? "" : normalized.subcategory,
+      brand: filters.onlyNew ? "" : normalized.brand,
+      model: filters.onlyNew ? "" : normalized.model,
+      search: filters.onlyNew ? "" : normalized.search,
+      page,
+      pageSize,
+    })}`);
+  } catch {
+    return emptyD1CatalogResult(page, pageSize, normalized, initialOptions);
+  }
   const filterOptions = normalized.category === ALL_CATEGORY
     ? initialOptions
     : await getD1FilterOptions(normalized.category);

@@ -360,7 +360,7 @@ function buildCatalogPath(filters: CatalogActiveFilters, page: number, pageSize:
   }
 
   const from = (page - 1) * pageSize;
-  params.push("order=imported_at.desc.nullslast,created_at.desc.nullslast", `offset=${from}`, `limit=${pageSize}`);
+  params.push("order=product_code.desc,imported_at.desc.nullslast,created_at.desc.nullslast", `offset=${from}`, `limit=${pageSize}`);
 
   return `products?${params.join("&")}`;
 }
@@ -415,8 +415,15 @@ function newestTime(product: CatalogProduct) {
   return Date.parse(product.imported_at || product.created_at || "") || 0;
 }
 
+function productCodeNumber(product: CatalogProduct) {
+  const match = String(product.product_code || "").match(/^LM-(APP|BAG|SHO|ACC|WAT)-(\d+)$/);
+  return match ? Number(match[2]) : 0;
+}
+
 function sortNewestProducts(products: CatalogProduct[]) {
   return [...products].sort((a, b) => {
+    const codeDiff = productCodeNumber(b) - productCodeNumber(a);
+    if (codeDiff !== 0) return codeDiff;
     const timeDiff = newestTime(b) - newestTime(a);
     if (timeDiff !== 0) return timeDiff;
     return String(b.product_code || "").localeCompare(String(a.product_code || ""));
