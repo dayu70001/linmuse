@@ -39,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
+    "muse-whatsapp-extension",
     "scripts/**/*.ts",
     "backup-mobile-pagination-20260502-021329"
   ]

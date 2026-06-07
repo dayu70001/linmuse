@@ -5,9 +5,24 @@ import { Header } from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://linmuse.com"),
   title: "LM Dkbrand | Factory Direct Retail & Wholesale",
   description:
     "LM Dkbrand offers apparel, shoes, watches, and bags for retail and wholesale buyers, with factory-direct supply, orders from 1 piece, and fast delivery in 7-12 business days.",
+  openGraph: {
+    title: "LM Dkbrand | Factory Direct Retail & Wholesale",
+    description:
+      "LM Dkbrand offers apparel, shoes, watches, and bags for retail and wholesale buyers, with factory-direct supply, orders from 1 piece, and fast delivery in 7-12 business days.",
+    url: "https://linmuse.com",
+    siteName: "LM Dkbrand",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LM Dkbrand | Factory Direct Retail & Wholesale",
+    description:
+      "LM Dkbrand offers apparel, shoes, watches, and bags for retail and wholesale buyers, with factory-direct supply, orders from 1 piece, and fast delivery in 7-12 business days.",
+  },
 };
 
 export default function RootLayout({
