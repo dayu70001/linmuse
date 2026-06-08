@@ -1,11 +1,11 @@
 // Homepage settings — single JSON file in R2.
 // R2 key:  site/home/homepage-settings.json
 //
-// Admin API routes AND getHomepageSettings() both use getR2Json()
-// (SigV4-signed direct GET, bypasses CDN cache entirely).
-// NO Supabase. NO D1. NO CDN URL reads for server logic.
+// Public page reads prefer the CDN JSON with short Next.js revalidation.
+// Admin API routes still use direct R2 helpers for fresh reads/writes.
+// NO Supabase. NO D1.
 
-import { getR2Json } from "@/lib/r2Upload";
+import { getR2Json, readCdnJson } from "@/lib/r2Upload";
 
 // ---------------------------------------------------------------------------
 // Slot definitions — safe to import on client
@@ -93,6 +93,7 @@ export const ALLOWED_R2_KEYS = new Set(HOME_IMAGE_SLOTS.map((s) => s.r2Key));
 // ---------------------------------------------------------------------------
 
 export const SETTINGS_R2_KEY = "site/home/homepage-settings.json";
+const HOMEPAGE_SETTINGS_REVALIDATE_SECONDS = 30;
 
 export function settingsPublicUrl(): string {
   const base = (process.env.R2_PUBLIC_BASE_URL || "https://img.linmuse.com").replace(/\/$/, "");
@@ -130,13 +131,12 @@ export type ShippingProofFeedbackItem = {
 };
 
 /**
- * Server-side: fetch settings via SigV4-signed direct GET from R2.
- * Bypasses CDN cache — always returns the latest data.
+ * Server-side: fetch public settings from the CDN cache first, then fall back
+ * to SigV4-signed direct R2 GET if the public read fails.
  * Never throws — falls back to local mock images on any error.
  */
 export async function getHomepageSettings(): Promise<HomepageSettings> {
-  // Direct R2 read — getR2Json uses SigV4, no CDN
-  const raw = (await getR2Json<Record<string, unknown>>(SETTINGS_R2_KEY)) ?? {};
+  const raw = await readHomepageSettingsRaw();
 
   const images: Record<string, string> = {};
   for (const slot of HOME_IMAGE_SLOTS) {
@@ -185,6 +185,23 @@ export async function getHomepageSettings(): Promise<HomepageSettings> {
     },
     shippingProofFeedbackGallery,
   };
+}
+
+async function readHomepageSettingsRaw(): Promise<Record<string, unknown>> {
+  const cdnRaw = await readCdnJson<unknown>(
+    settingsPublicUrl(),
+    HOMEPAGE_SETTINGS_REVALIDATE_SECONDS,
+  );
+  if (isRecord(cdnRaw)) return cdnRaw;
+
+  const r2Raw = await getR2Json<unknown>(SETTINGS_R2_KEY);
+  if (isRecord(r2Raw)) return r2Raw;
+
+  return {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function getString(raw: Record<string, unknown>, key: string) {
