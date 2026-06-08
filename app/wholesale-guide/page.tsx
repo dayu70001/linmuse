@@ -1,5 +1,36 @@
+import type { Metadata } from "next";
 import { SectionHeading } from "@/components/SectionHeading";
+import { buildCanonical, SITE_NAME } from "@/lib/seo";
 import Link from "next/link";
+
+const title = "Wholesale Guide | LM Dkbrand";
+const description =
+  "Learn how to order from LM Dkbrand for retail and wholesale, including product codes, order checks and delivery information.";
+const canonical = buildCanonical("/wholesale-guide");
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: {
+    canonical,
+  },
+  openGraph: {
+    title,
+    description,
+    url: canonical,
+    siteName: SITE_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 const guideSections = [
   ["Retail Orders", "Browse products, save the product ID or screenshot, and prepare size, color, quantity, and destination details."],

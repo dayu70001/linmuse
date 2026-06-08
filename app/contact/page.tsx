@@ -1,8 +1,39 @@
+import type { Metadata } from "next";
 import { PackageSearch } from "lucide-react";
 import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { getHomepageSettings } from "@/lib/homepageSettings";
+import { buildCanonical, SITE_NAME } from "@/lib/seo";
+
+const title = "Contact | LM Dkbrand";
+const description =
+  "Contact LM Dkbrand official channels for product details, availability, retail orders, wholesale inquiries and delivery information.";
+const canonical = buildCanonical("/contact");
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: {
+    canonical,
+  },
+  openGraph: {
+    title,
+    description,
+    url: canonical,
+    siteName: SITE_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 // Render on every request so admin email changes (R2 settings JSON) appear immediately.
 export const dynamic = "force-dynamic";

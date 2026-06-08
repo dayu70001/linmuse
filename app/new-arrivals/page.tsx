@@ -1,8 +1,39 @@
+import type { Metadata } from "next";
 import { CatalogGrid } from "@/components/CatalogGrid";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getCatalogProducts } from "@/lib/products";
+import { buildCanonical, SITE_NAME } from "@/lib/seo";
 import { headers } from "next/headers";
 import { Suspense } from "react";
+
+const title = "New Arrivals | LM Dkbrand";
+const description =
+  "Explore the latest LM Dkbrand arrivals across apparel, shoes, watches, bags and accessories for retail and wholesale buyers.";
+const canonical = buildCanonical("/new-arrivals");
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: {
+    canonical,
+  },
+  openGraph: {
+    title,
+    description,
+    url: canonical,
+    siteName: SITE_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 function getPageSize(userAgent: string, mobileHint: string | null) {
   return mobileHint === "?1" || /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent) ? 20 : 25;

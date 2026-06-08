@@ -6,8 +6,41 @@ import { products } from "@/data/products";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { getCatalogProductBySlug } from "@/lib/products";
 import type { CatalogProduct, CatalogSeoContent } from "@/lib/products";
+import { buildCanonical, jsonLdStringify, safeAbsoluteUrl, SITE_NAME } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+const productDescriptionFallback = "View product details, images and order information from LM Dkbrand.";
+const riskyTermPattern = /\b(replica|fake|1:1|aaa)\b|原单|顶级复刻/i;
+
+function safeSeoText(value: string | null | undefined, fallback: string) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text || riskyTermPattern.test(text)) return fallback;
+  return text;
+}
+
+function productTitle(product: CatalogProduct) {
+  const seo = product.seo_content;
+  return safeSeoText(seo?.seo_title || seo?.display_title || product.title_en, "Product");
+}
+
+function productDescription(product: CatalogProduct) {
+  const seo = product.seo_content;
+  return safeSeoText(
+    seo?.seo_description || seo?.product_overview || product.description_en,
+    productDescriptionFallback,
+  ).slice(0, 300);
+}
+
+function productImages(product: CatalogProduct) {
+  return Array.from(
+    new Set([product.main_image_url, ...product.gallery_image_urls].map(safeAbsoluteUrl).filter(Boolean)),
+  );
+}
+
+function productUrl(product: CatalogProduct, slug: string) {
+  return buildCanonical(`/catalog/${product.slug || slug}`);
+}
 
 export function generateStaticParams() {
   return products.map((product) => ({ slug: product.slug }));
@@ -21,15 +54,33 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const product = await getCatalogProductBySlug(slug);
   if (!product) return {};
   const seo = product.seo_content;
-  const title = (seo?.seo_title || product.title_en || "Product").trim();
-  const description = (seo?.seo_description || product.description_en || "").trim().slice(0, 300);
+  const title = productTitle(product);
+  const description = productDescription(product);
+  const canonical = productUrl(product, slug);
+  const image = safeAbsoluteUrl(product.main_image_url);
   return {
     title,
     description,
+    alternates: {
+      canonical,
+    },
     openGraph: {
       title,
       description,
-      images: product.main_image_url ? [{ url: product.main_image_url, alt: seo?.image_alt || product.title_en }] : [],
+      url: canonical,
+      siteName: SITE_NAME,
+      type: "website",
+      images: image ? [{ url: image, alt: seo?.image_alt || product.title_en }] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: image ? [image] : [],
+    },
+    robots: {
+      index: true,
+      follow: true,
     },
   };
 }
@@ -59,9 +110,65 @@ export default async function ProductDetailPage({
 
   const seo = product.seo_content;
   const galleryAlt = seo?.image_alt || product.title_en;
+  const title = productTitle(product);
+  const description = productDescription(product);
+  const canonical = productUrl(product, slug);
+  const images = productImages(product);
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: title,
+    description,
+    sku: product.product_code,
+    category: product.category,
+    image: images,
+    brand: {
+      "@type": "Brand",
+      name: "LM Dkbrand",
+    },
+    url: canonical,
+  };
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: buildCanonical("/"),
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Catalog",
+        item: buildCanonical("/catalog"),
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: product.category,
+        item: buildCanonical(`/catalog?category=${encodeURIComponent(product.category)}`),
+      },
+      {
+        "@type": "ListItem",
+        position: 4,
+        name: title,
+        item: canonical,
+      },
+    ],
+  };
 
   return (
     <main className="bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdStringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdStringify(breadcrumbJsonLd) }}
+      />
       <section className="section-pad">
         <div className="container-page">
           <Link className="inline-flex items-center gap-2 text-sm font-bold text-muted hover:text-gold" href="/catalog">

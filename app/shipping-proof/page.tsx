@@ -1,8 +1,39 @@
+import type { Metadata } from "next";
 import { Camera, PackageCheck, Video } from "lucide-react";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getHomepageSettings } from "@/lib/homepageSettings";
+import { buildCanonical, SITE_NAME } from "@/lib/seo";
 import Link from "next/link";
 import { ShippingProofFeedbackGallery } from "./FeedbackGallery";
+
+const title = "Shipping Proof | LM Dkbrand";
+const description =
+  "View LM Dkbrand shipping proof, packing updates and delivery preparation records for retail and wholesale orders.";
+const canonical = buildCanonical("/shipping-proof");
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: {
+    canonical,
+  },
+  openGraph: {
+    title,
+    description,
+    url: canonical,
+    siteName: SITE_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 export default async function ShippingProofPage() {
   const settings = await getHomepageSettings();
