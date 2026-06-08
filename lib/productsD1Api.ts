@@ -94,6 +94,10 @@ function parsePage(value: CatalogFilters["page"]) {
 }
 
 const NEW_ARRIVALS_TOTAL_LIMIT = 199;
+const REVALIDATE_CATALOG_SECONDS = 60;
+const REVALIDATE_LATEST_SECONDS = 60;
+const REVALIDATE_PRODUCT_SECONDS = 300;
+const REVALIDATE_FILTERS_SECONDS = 300;
 
 function newestTime(product: CatalogProduct) {
   return Date.parse(product.imported_at || product.created_at || "") || 0;
@@ -153,9 +157,9 @@ function normalizeArray(value: unknown): string[] {
   return [];
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
+async function fetchJson<T>(path: string, options: { revalidate?: number } = {}): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
-    cache: "no-store",
+    ...(options.revalidate ? { next: { revalidate: options.revalidate } } : { cache: "no-store" as const }),
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
@@ -307,10 +311,10 @@ export async function getD1FilterOptions(category = ALL_CATEGORY): Promise<Catal
   const requestedCategory = cleanTaxonomyValue(category || "") || ALL_CATEGORY;
   const categoryQuery = requestedCategory !== ALL_CATEGORY ? queryString({ category: requestedCategory }) : "";
   const [allFilters, categoryFilters] = await Promise.all([
-    fetchJson<D1FiltersResponse>("/filters").catch((): D1FiltersResponse => ({})),
+    fetchJson<D1FiltersResponse>("/filters", { revalidate: REVALIDATE_FILTERS_SECONDS }).catch((): D1FiltersResponse => ({})),
     requestedCategory === ALL_CATEGORY
       ? Promise.resolve<D1FiltersResponse>({})
-      : fetchJson<D1FiltersResponse>(`/filters${categoryQuery}`).catch((): D1FiltersResponse => ({})),
+      : fetchJson<D1FiltersResponse>(`/filters${categoryQuery}`, { revalidate: REVALIDATE_FILTERS_SECONDS }).catch((): D1FiltersResponse => ({})),
   ]);
   const categories = [ALL_CATEGORY, ...sortCategories((allFilters.categories || []).filter(Boolean))];
   const activeCategory = categories.includes(requestedCategory) ? requestedCategory : ALL_CATEGORY;
@@ -345,7 +349,7 @@ async function getLimitedNewArrivalsFromD1(
           category,
           page: 1,
           pageSize: perCategoryLimit,
-        })}`);
+        })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
         return (response.products || []).map(mapD1Product);
       }),
     );
@@ -355,7 +359,7 @@ async function getLimitedNewArrivalsFromD1(
       category: normalized.category,
       page: 1,
       pageSize: perCategoryLimit,
-    })}`);
+    })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
     rows = (response.products || []).map(mapD1Product);
   }
 
@@ -400,7 +404,7 @@ export async function getCatalogProductsFromD1(filters: CatalogFilters = {}): Pr
       search: filters.onlyNew ? "" : normalized.search,
       page,
       pageSize,
-    })}`);
+    })}`, { revalidate: REVALIDATE_CATALOG_SECONDS });
   } catch {
     return emptyD1CatalogResult(page, pageSize, normalized, initialOptions);
   }
@@ -420,6 +424,6 @@ export async function getCatalogProductsFromD1(filters: CatalogFilters = {}): Pr
 }
 
 export async function getCatalogProductBySlugFromD1(slugOrCode: string) {
-  const product = await fetchJson<D1DetailProduct>(`/product/${encodeURIComponent(slugOrCode)}`);
+  const product = await fetchJson<D1DetailProduct>(`/product/${encodeURIComponent(slugOrCode)}`, { revalidate: REVALIDATE_PRODUCT_SECONDS });
   return mapD1Product(product);
 }
