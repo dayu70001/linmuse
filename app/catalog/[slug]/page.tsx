@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { products } from "@/data/products";
+import { cache } from "react";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { getCatalogProductBySlug } from "@/lib/products";
 import type { CatalogProduct, CatalogSeoContent } from "@/lib/products";
 import { buildCanonical, jsonLdStringify, safeAbsoluteUrl, SITE_NAME } from "@/lib/seo";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
+export const dynamicParams = true;
 
 const productDescriptionFallback = "View product details, images and order information from LM Dkbrand.";
 const riskyTermPattern = /\b(replica|fake|1:1|aaa)\b|原单|顶级复刻/i;
@@ -42,8 +43,20 @@ function productUrl(product: CatalogProduct, slug: string) {
   return buildCanonical(`/catalog/${product.slug || slug}`);
 }
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
+const getCachedProductBySlug = cache(async (slug: string) => {
+  try {
+    return await getCatalogProductBySlug(slug);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("D1 product API failed: 404") || message.includes("Product not found")) {
+      return null;
+    }
+    throw error;
+  }
+});
+
+export async function generateStaticParams() {
+  return [];
 }
 
 // SEO metadata uses the joined product_seo_content row when present, otherwise
@@ -51,7 +64,7 @@ export function generateStaticParams() {
 // underlying products.title / products.description columns.
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getCatalogProductBySlug(slug);
+  const product = await getCachedProductBySlug(slug);
   if (!product) return {};
   const seo = product.seo_content;
   const title = productTitle(product);
@@ -91,7 +104,7 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getCatalogProductBySlug(slug);
+  const product = await getCachedProductBySlug(slug);
 
   if (!product) {
     notFound();
