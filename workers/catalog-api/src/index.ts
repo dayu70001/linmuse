@@ -151,6 +151,11 @@ const BAG_SUBCATEGORY_ORDER = [
   "Clutches",
 ];
 
+const CACHE_CATALOG = "public, max-age=60, s-maxage=60, stale-while-revalidate=300";
+const CACHE_PRODUCT = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+const CACHE_FILTERS = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+const CACHE_SITEMAP_PRODUCTS = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+
 function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
@@ -347,13 +352,16 @@ async function listProducts(env: Env, url: URL, options: { latest?: boolean } = 
     .bind(...query.params, pageSize, safeOffset)
     .all();
 
-  return json({
-    products: products.results || [],
-    total,
-    page: safePage,
-    pageSize,
-    totalPages,
-  });
+  return jsonCached(
+    {
+      products: products.results || [],
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+    },
+    CACHE_CATALOG,
+  );
 }
 
 function sitemapLastModified(row: SitemapProductRow) {
@@ -405,7 +413,7 @@ async function sitemapProducts(env: Env, url: URL) {
       count: products.length,
       hasMore: resultRows.length > pageSize,
     },
-    "public, max-age=300, s-maxage=300, stale-while-revalidate=600",
+    CACHE_SITEMAP_PRODUCTS,
   );
 }
 
@@ -441,12 +449,15 @@ async function getProduct(env: Env, slugOrCode: string) {
     if (!k.startsWith("seo_")) cleanRow[k] = v;
   }
 
-  return json({
-    ...cleanRow,
-    gallery_thumbnail_urls: parseJsonArray(row.gallery_thumbnail_urls),
-    gallery_image_urls: parseJsonArray(row.gallery_image_urls),
-    seo_content: seoBundle,
-  });
+  return jsonCached(
+    {
+      ...cleanRow,
+      gallery_thumbnail_urls: parseJsonArray(row.gallery_thumbnail_urls),
+      gallery_image_urls: parseJsonArray(row.gallery_image_urls),
+      seo_content: seoBundle,
+    },
+    CACHE_PRODUCT,
+  );
 }
 
 function strOrEmpty(v: unknown): string {
@@ -525,18 +536,21 @@ async function filters(env: Env, url: URL) {
   const cleanBrands = aggregateCanonicalCounts(brands, canonicalBrand);
   const cleanModels = aggregateCanonicalCounts(models, (value) => (isVisibleFilterValue(value) ? clean(value, 200) : ""));
 
-  return json({
-    categories: categories.map((item) => item.value),
-    subcategories: cleanSubcategories.map((item) => item.value),
-    brands: cleanBrands.map((item) => item.value),
-    models: cleanModels.map((item) => item.value),
-    counts: {
-      categories,
-      subcategories: cleanSubcategories,
-      brands: cleanBrands,
-      models: cleanModels,
+  return jsonCached(
+    {
+      categories: categories.map((item) => item.value),
+      subcategories: cleanSubcategories.map((item) => item.value),
+      brands: cleanBrands.map((item) => item.value),
+      models: cleanModels.map((item) => item.value),
+      counts: {
+        categories,
+        subcategories: cleanSubcategories,
+        brands: cleanBrands,
+        models: cleanModels,
+      },
     },
-  });
+    CACHE_FILTERS,
+  );
 }
 
 export default {
