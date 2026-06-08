@@ -21,6 +21,15 @@ type QueryBuild = {
   params: unknown[];
 };
 
+type SitemapProductRow = {
+  slug?: string | null;
+  product_code?: string | null;
+  category?: string | null;
+  updated_at?: string | null;
+  imported_at?: string | null;
+  created_at?: string | null;
+};
+
 const LIGHT_FIELDS = [
   "product_code",
   "slug",
@@ -148,6 +157,19 @@ function json(value: unknown, status = 200) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "content-type",
+    },
+  });
+}
+
+function jsonCached(value: unknown, cacheControl: string, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": cacheControl,
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, OPTIONS",
       "access-control-allow-headers": "content-type",
@@ -334,6 +356,59 @@ async function listProducts(env: Env, url: URL, options: { latest?: boolean } = 
   });
 }
 
+function sitemapLastModified(row: SitemapProductRow) {
+  return clean(row.updated_at || "", 80) || clean(row.imported_at || "", 80) || clean(row.created_at || "", 80) || null;
+}
+
+async function sitemapProducts(env: Env, url: URL) {
+  const page = positiveInt(url.searchParams.get("page"), 1, 100000);
+  const pageSize = positiveInt(url.searchParams.get("pageSize"), 1000, 1000);
+  const offset = (page - 1) * pageSize;
+  const rows = await env.DB
+    .prepare(
+      `SELECT
+        p.slug,
+        p.product_code,
+        p.category,
+        seo.updated_at AS updated_at,
+        p.imported_at,
+        p.created_at
+      FROM products p
+      LEFT JOIN product_seo_content seo ON seo.product_code = p.product_code
+      WHERE p.status = ? AND p.is_active = ?
+      ORDER BY CAST(substr(p.product_code, 8) AS INTEGER) DESC, p.imported_at DESC, p.created_at DESC, p.product_code DESC
+      LIMIT ? OFFSET ?`,
+    )
+    .bind("published", 1, pageSize + 1, offset)
+    .all<SitemapProductRow>();
+
+  const resultRows = rows.results || [];
+  const products = resultRows
+    .slice(0, pageSize)
+    .map((row) => {
+      const productCode = clean(row.product_code || "", 120);
+      const slug = clean(row.slug || productCode, 160).toLowerCase();
+      return {
+        slug,
+        product_code: productCode,
+        category: clean(row.category || "", 120),
+        last_modified: sitemapLastModified(row),
+      };
+    })
+    .filter((product) => product.slug && product.product_code);
+
+  return jsonCached(
+    {
+      products,
+      page,
+      pageSize,
+      count: products.length,
+      hasMore: resultRows.length > pageSize,
+    },
+    "public, max-age=300, s-maxage=300, stale-while-revalidate=600",
+  );
+}
+
 async function getProduct(env: Env, slugOrCode: string) {
   const key = clean(decodeURIComponent(slugOrCode), 160);
   if (!key) return json({ error: "Missing product id" }, 400);
@@ -477,6 +552,7 @@ export default {
       if (pathname === "/catalog") return listProducts(env, url);
       if (pathname === "/latest") return listProducts(env, url, { latest: true });
       if (pathname === "/filters") return filters(env, url);
+      if (pathname === "/sitemap-products") return sitemapProducts(env, url);
       if (pathname.startsWith("/product/")) {
         return getProduct(env, pathname.slice("/product/".length));
       }
