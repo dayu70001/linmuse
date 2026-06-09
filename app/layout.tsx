@@ -23,6 +23,9 @@ export const metadata: Metadata = {
     description:
       "LM Dkbrand offers apparel, shoes, watches, and bags for retail and wholesale buyers, with factory-direct supply, orders from 1 piece, and fast delivery in 7-12 business days.",
   },
+  verification: {
+    google: "w_-bXnffBPh3XyPIfTHDXlpCamcQkG3Y4a_Ex1rP3jo",
+  },
 };
 
 export default function RootLayout({
