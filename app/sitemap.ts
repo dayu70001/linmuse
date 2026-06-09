@@ -9,6 +9,7 @@ const urls = [
   "/shipping-proof",
   "/wholesale-guide",
   "/contact",
+  "/catalog/bags",
   "/catalog?category=Apparel",
   "/catalog?category=Shoes",
   "/catalog?category=Watches",
