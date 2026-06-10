@@ -16,6 +16,14 @@ export interface Env {
   DB: D1Database;
 }
 
+type ExecutionCtx = {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
+type CloudflareCacheStorage = CacheStorage & {
+  default: Cache;
+};
+
 type QueryBuild = {
   where: string[];
   params: unknown[];
@@ -153,7 +161,7 @@ const BAG_SUBCATEGORY_ORDER = [
 
 const CACHE_CATALOG = "public, max-age=60, s-maxage=60, stale-while-revalidate=300";
 const CACHE_PRODUCT = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
-const CACHE_FILTERS = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+const CACHE_FILTERS = "public, max-age=1800, s-maxage=1800, stale-while-revalidate=3600";
 const CACHE_SITEMAP_PRODUCTS = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
 
 function json(value: unknown, status = 200) {
@@ -179,6 +187,16 @@ function jsonCached(value: unknown, cacheControl: string, status = 200) {
       "access-control-allow-methods": "GET, OPTIONS",
       "access-control-allow-headers": "content-type",
     },
+  });
+}
+
+function responseWithHeader(response: Response, name: string, value: string) {
+  const headers = new Headers(response.headers);
+  headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -514,6 +532,17 @@ async function distinctValues(env: Env, column: string, category: string) {
   return (rows.results || []).map((row) => ({ value: row.value, count: row.count }));
 }
 
+function filterCacheKey(request: Request, url: URL) {
+  const cacheUrl = new URL(request.url);
+  cacheUrl.pathname = "/filters";
+  cacheUrl.search = "";
+
+  const category = clean(url.searchParams.get("category"));
+  if (category) cacheUrl.searchParams.set("category", category);
+
+  return new Request(cacheUrl.toString(), { method: "GET" });
+}
+
 async function filters(env: Env, url: URL) {
   const category = clean(url.searchParams.get("category"));
   const categoriesRows = await env.DB
@@ -551,8 +580,22 @@ async function filters(env: Env, url: URL) {
   );
 }
 
+async function cachedFilters(env: Env, request: Request, url: URL, ctx: ExecutionCtx) {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const cacheKey = filterCacheKey(request, url);
+  const cached = await cache.match(cacheKey);
+  if (cached) return responseWithHeader(cached, "x-linmuse-filters-cache", "HIT");
+
+  const response = await filters(env, url);
+  const responseWithDebugHeader = responseWithHeader(response, "x-linmuse-filters-cache", "MISS");
+  if (responseWithDebugHeader.status === 200) {
+    ctx.waitUntil(cache.put(cacheKey, responseWithDebugHeader.clone()));
+  }
+  return responseWithDebugHeader;
+}
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     if (request.method === "OPTIONS") return json({ ok: true });
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
 
@@ -563,7 +606,7 @@ export default {
       if (pathname === "/health") return json({ ok: true });
       if (pathname === "/catalog") return listProducts(env, url);
       if (pathname === "/latest") return listProducts(env, url, { latest: true });
-      if (pathname === "/filters") return filters(env, url);
+      if (pathname === "/filters") return cachedFilters(env, request, url, ctx);
       if (pathname === "/sitemap-products") return sitemapProducts(env, url);
       if (pathname.startsWith("/product/")) {
         return getProduct(env, pathname.slice("/product/".length));
