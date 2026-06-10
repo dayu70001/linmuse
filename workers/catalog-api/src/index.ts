@@ -375,16 +375,14 @@ async function sitemapProducts(env: Env, url: URL) {
   const rows = await env.DB
     .prepare(
       `SELECT
-        p.slug,
-        p.product_code,
-        p.category,
-        seo.updated_at AS updated_at,
-        p.imported_at,
-        p.created_at
-      FROM products p
-      LEFT JOIN product_seo_content seo ON seo.product_code = p.product_code
-      WHERE p.status = ? AND p.is_active = ?
-      ORDER BY CAST(substr(p.product_code, 8) AS INTEGER) DESC, p.imported_at DESC, p.created_at DESC, p.product_code DESC
+        slug,
+        product_code,
+        category,
+        imported_at,
+        created_at
+      FROM products
+      WHERE status = ? AND is_active = ?
+      ORDER BY product_code ASC
       LIMIT ? OFFSET ?`,
     )
     .bind("published", 1, pageSize + 1, offset)

@@ -1,7 +1,7 @@
 const SITE_URL = "https://linmuse.com";
 const DEFAULT_API_BASE = "https://linmuse-catalog-api-staging.linmusedkbrand2026.workers.dev";
 const PRODUCT_SITEMAP_PAGE_SIZE = 1000;
-const MAX_PRODUCT_SITEMAP_PAGES = 100;
+const PRODUCT_SITEMAP_PAGE_COUNT = 6;
 const CACHE_CONTROL = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
 
 type SitemapProduct = {
@@ -112,14 +112,10 @@ export async function GET(request: Request) {
 
   try {
     if (!pageParam) {
-      const pages: number[] = [];
-      for (let page = 1; page <= MAX_PRODUCT_SITEMAP_PAGES; page += 1) {
-        const data = await fetchProductSitemapPage(page);
-        const count = Number(data.count || 0);
-        if (count <= 0) break;
-        pages.push(page);
-        if (!data.hasMore || count < PRODUCT_SITEMAP_PAGE_SIZE) break;
-      }
+      const pages = Array.from(
+        { length: PRODUCT_SITEMAP_PAGE_COUNT },
+        (_, index) => index + 1,
+      );
       return xmlResponse(sitemapIndexXml(pages));
     }
 
