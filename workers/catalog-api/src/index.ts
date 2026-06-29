@@ -159,10 +159,37 @@ const BAG_SUBCATEGORY_ORDER = [
   "Clutches",
 ];
 
-const CACHE_CATALOG = "public, max-age=60, s-maxage=60, stale-while-revalidate=300";
-const CACHE_PRODUCT = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+// Cache-Control strings used both as the response header AND as the TTL the
+// Cloudflare Cache API honors when we cache.put() the response. Every hot GET
+// endpoint is now backed by the edge Cache API (see serveCached) so a repeat
+// request for the same normalized key never reaches D1.
+const CACHE_CATALOG = "public, max-age=600, s-maxage=600, stale-while-revalidate=1800";
+const CACHE_LATEST = "public, max-age=900, s-maxage=900, stale-while-revalidate=1800";
+const CACHE_PRODUCT = "public, max-age=1800, s-maxage=1800, stale-while-revalidate=3600";
+// Short negative cache so a flood of non-existent slugs (scrapers / stale links)
+// can't keep hammering D1 with full lookups.
+const CACHE_PRODUCT_404 = "public, max-age=60, s-maxage=60";
 const CACHE_FILTERS = "public, max-age=1800, s-maxage=1800, stale-while-revalidate=3600";
-const CACHE_SITEMAP_PRODUCTS = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+const CACHE_SITEMAP_PRODUCTS = "public, max-age=21600, s-maxage=21600, stale-while-revalidate=43200";
+
+// Tracking / ad-click / cache-buster params that must NEVER affect the cache
+// key — otherwise every Googlebot or ad referral with a unique utm/fbclid would
+// punch straight through to D1.
+const IGNORED_CACHE_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+  "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "ttclid", "yclid", "twclid",
+  "ref", "referrer", "source", "spm", "scm",
+  "_", "t", "ts", "timestamp", "random", "rand", "cb", "v", "cache",
+]);
+
+// Only these business params are allowed into the normalized cache key for each
+// endpoint. Anything else (including the ignored set above) is dropped.
+const ALLOWED_CACHE_PARAMS: Record<string, readonly string[]> = {
+  catalog: ["category", "subcategory", "brand", "model", "search", "page", "pageSize"],
+  latest: ["category", "page", "pageSize"],
+  filters: ["category"],
+  "sitemap-products": ["page", "pageSize"],
+};
 
 function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -190,14 +217,66 @@ function jsonCached(value: unknown, cacheControl: string, status = 200) {
   });
 }
 
-function responseWithHeader(response: Response, name: string, value: string) {
-  const headers = new Headers(response.headers);
-  headers.set(name, value);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+// Build a normalized GET Request to use as the Cache API key. Only the
+// whitelisted business params for the endpoint are kept (trimmed + sorted), so
+// `?page=1&utm_source=x&fbclid=y` and `?page=1` collapse to the same key.
+// `pathOverride` lets /product/:id pass its decoded id as the cache path.
+function normalizedCacheKey(request: Request, endpoint: string, pathOverride?: string) {
+  const src = new URL(request.url);
+  const key = new URL(src.origin + (pathOverride ?? src.pathname));
+  const allowed = ALLOWED_CACHE_PARAMS[endpoint] || [];
+  const pairs: Array<[string, string]> = [];
+  for (const name of allowed) {
+    const raw = src.searchParams.get(name);
+    if (raw == null) continue;
+    const value = clean(raw, 200);
+    if (!value || IGNORED_CACHE_PARAMS.has(name)) continue;
+    pairs.push([name, value]);
+  }
+  pairs.sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [name, value] of pairs) key.searchParams.set(name, value);
+  return new Request(key.toString(), { method: "GET" });
+}
+
+type ServeCachedOptions = {
+  endpoint: string;
+  key: Request;
+  okCacheControl: string;
+  notFoundCacheControl?: string;
+  extraHeaders?: Record<string, string>;
+  produce: () => Promise<Response>;
+};
+
+// Generic Cloudflare Cache API wrapper for every hot GET endpoint. On a HIT the
+// stored response is returned without touching D1. On a MISS we run `produce`
+// (which queries D1), tag it, and — only for cacheable statuses — store it.
+async function serveCached(ctx: ExecutionCtx, opts: ServeCachedOptions): Promise<Response> {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const extra = opts.extraHeaders || {};
+
+  const hit = await cache.match(opts.key);
+  if (hit) {
+    const headers = new Headers(hit.headers);
+    headers.set("x-linmuse-cache", "HIT");
+    headers.set("x-linmuse-cache-endpoint", opts.endpoint);
+    for (const [k, v] of Object.entries(extra)) headers.set(k, v);
+    return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers });
+  }
+
+  const fresh = await opts.produce();
+  let storeCacheControl: string | undefined;
+  if (fresh.status === 200) storeCacheControl = opts.okCacheControl;
+  else if (fresh.status === 404 && opts.notFoundCacheControl) storeCacheControl = opts.notFoundCacheControl;
+
+  const headers = new Headers(fresh.headers);
+  headers.set("x-linmuse-cache", "MISS");
+  headers.set("x-linmuse-cache-endpoint", opts.endpoint);
+  if (storeCacheControl) headers.set("cache-control", storeCacheControl);
+  for (const [k, v] of Object.entries(extra)) headers.set(k, v);
+
+  const out = new Response(fresh.body, { status: fresh.status, statusText: fresh.statusText, headers });
+  if (storeCacheControl) ctx.waitUntil(cache.put(opts.key, out.clone()));
+  return out;
 }
 
 function clean(value: string | null, maxLength = 120) {
@@ -532,17 +611,6 @@ async function distinctValues(env: Env, column: string, category: string) {
   return (rows.results || []).map((row) => ({ value: row.value, count: row.count }));
 }
 
-function filterCacheKey(request: Request, url: URL) {
-  const cacheUrl = new URL(request.url);
-  cacheUrl.pathname = "/filters";
-  cacheUrl.search = "";
-
-  const category = clean(url.searchParams.get("category"));
-  if (category) cacheUrl.searchParams.set("category", category);
-
-  return new Request(cacheUrl.toString(), { method: "GET" });
-}
-
 async function filters(env: Env, url: URL) {
   const category = clean(url.searchParams.get("category"));
   const categoriesRows = await env.DB
@@ -580,37 +648,74 @@ async function filters(env: Env, url: URL) {
   );
 }
 
-async function cachedFilters(env: Env, request: Request, url: URL, ctx: ExecutionCtx) {
-  const cache = (caches as CloudflareCacheStorage).default;
-  const cacheKey = filterCacheKey(request, url);
-  const cached = await cache.match(cacheKey);
-  if (cached) return responseWithHeader(cached, "x-linmuse-filters-cache", "HIT");
-
-  const response = await filters(env, url);
-  const responseWithDebugHeader = responseWithHeader(response, "x-linmuse-filters-cache", "MISS");
-  if (responseWithDebugHeader.status === 200) {
-    ctx.waitUntil(cache.put(cacheKey, responseWithDebugHeader.clone()));
-  }
-  return responseWithDebugHeader;
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     if (request.method === "OPTIONS") return json({ ok: true });
-    if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+    // Cache GET and HEAD (curl -I). Everything else bypasses the cache entirely.
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return json({ error: "Method not allowed" }, 405);
+    }
 
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
     try {
       if (pathname === "/health") return json({ ok: true });
-      if (pathname === "/catalog") return listProducts(env, url);
-      if (pathname === "/latest") return listProducts(env, url, { latest: true });
-      if (pathname === "/filters") return cachedFilters(env, request, url, ctx);
-      if (pathname === "/sitemap-products") return sitemapProducts(env, url);
-      if (pathname.startsWith("/product/")) {
-        return getProduct(env, pathname.slice("/product/".length));
+
+      if (pathname === "/catalog") {
+        const page = positiveInt(url.searchParams.get("page"), 1, 100000);
+        const pageSize = positiveInt(url.searchParams.get("pageSize"), 25, 50);
+        return serveCached(ctx, {
+          endpoint: "catalog",
+          key: normalizedCacheKey(request, "catalog"),
+          okCacheControl: CACHE_CATALOG,
+          extraHeaders: { "x-linmuse-page": String(page), "x-linmuse-limit": String(pageSize) },
+          produce: () => listProducts(env, url),
+        });
       }
+
+      if (pathname === "/latest") {
+        const page = positiveInt(url.searchParams.get("page"), 1, 100000);
+        const pageSize = positiveInt(url.searchParams.get("pageSize"), 25, 50);
+        return serveCached(ctx, {
+          endpoint: "latest",
+          key: normalizedCacheKey(request, "latest"),
+          okCacheControl: CACHE_LATEST,
+          extraHeaders: { "x-linmuse-page": String(page), "x-linmuse-limit": String(pageSize) },
+          produce: () => listProducts(env, url, { latest: true }),
+        });
+      }
+
+      if (pathname === "/filters") {
+        return serveCached(ctx, {
+          endpoint: "filters",
+          key: normalizedCacheKey(request, "filters"),
+          okCacheControl: CACHE_FILTERS,
+          produce: () => filters(env, url),
+        });
+      }
+
+      if (pathname === "/sitemap-products") {
+        return serveCached(ctx, {
+          endpoint: "sitemap-products",
+          key: normalizedCacheKey(request, "sitemap-products"),
+          okCacheControl: CACHE_SITEMAP_PRODUCTS,
+          produce: () => sitemapProducts(env, url),
+        });
+      }
+
+      if (pathname.startsWith("/product/")) {
+        const id = pathname.slice("/product/".length);
+        const decoded = clean(decodeURIComponent(id), 160);
+        return serveCached(ctx, {
+          endpoint: "product",
+          key: normalizedCacheKey(request, "product", `/product/${encodeURIComponent(decoded)}`),
+          okCacheControl: CACHE_PRODUCT,
+          notFoundCacheControl: CACHE_PRODUCT_404,
+          produce: () => getProduct(env, id),
+        });
+      }
+
       return json({ error: "Not found" }, 404);
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : "Internal error" }, 500);

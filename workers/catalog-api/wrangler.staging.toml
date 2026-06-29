@@ -1,0 +1,11 @@
+name = "linmuse-catalog-api-staging"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+# Account that owns the linmuse-products-staging D1 database. Pinned here so
+# `wrangler deploy` is non-interactive (the auth token can see multiple accounts).
+account_id = "9bd69ce3e91032a287cfa6d3f53e669e"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "linmuse-products-staging"
+database_id = "5dd5465b-5fb6-43e5-81d1-5b73c3130c2f"

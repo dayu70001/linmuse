@@ -2,7 +2,11 @@ const SITE_URL = "https://linmuse.com";
 const DEFAULT_API_BASE = "https://linmuse-catalog-api-staging.linmusedkbrand2026.workers.dev";
 const PRODUCT_SITEMAP_PAGE_SIZE = 1000;
 const PRODUCT_SITEMAP_PAGE_COUNT = 6;
-const CACHE_CONTROL = "public, max-age=300, s-maxage=300, stale-while-revalidate=600";
+// Sitemaps barely change; cache them hard at the Vercel edge (6h) so repeated
+// Googlebot crawls don't re-run this route. The underlying worker
+// /sitemap-products call is itself edge-cached, so D1 is not touched either way.
+const CACHE_CONTROL = "public, max-age=21600, s-maxage=21600, stale-while-revalidate=43200";
+const SITEMAP_REVALIDATE_SECONDS = 21600;
 
 type SitemapProduct = {
   slug?: string | null;
@@ -72,6 +76,7 @@ async function fetchProductSitemapPage(page: number) {
     headers: {
       accept: "application/json",
     },
+    next: { revalidate: SITEMAP_REVALIDATE_SECONDS },
   });
   if (!response.ok) throw new Error("Product sitemap source failed");
   return response.json() as Promise<SitemapProductsResponse>;
