@@ -169,7 +169,7 @@ const CACHE_PRODUCT = "public, max-age=1800, s-maxage=1800, stale-while-revalida
 // Short negative cache so a flood of non-existent slugs (scrapers / stale links)
 // can't keep hammering D1 with full lookups.
 const CACHE_PRODUCT_404 = "public, max-age=60, s-maxage=60";
-const CACHE_FILTERS = "public, max-age=1800, s-maxage=1800, stale-while-revalidate=3600";
+const CACHE_FILTERS = "public, max-age=21600, s-maxage=21600, stale-while-revalidate=43200";
 const CACHE_SITEMAP_PRODUCTS = "public, max-age=21600, s-maxage=21600, stale-while-revalidate=43200";
 
 // Tracking / ad-click / cache-buster params that must NEVER affect the cache
