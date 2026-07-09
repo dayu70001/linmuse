@@ -108,12 +108,17 @@ function productCodeNumber(product: CatalogProduct) {
   return match ? Number(match[2]) : 0;
 }
 
+// Real "latest first" order: the imported_at/created_at timestamp set at
+// import time is the reliable signal. product_code's numeric suffix is only
+// a same-category tiebreaker — different categories keep independent SKU
+// counters (Apparel's runs far ahead of Shoes/Watches/Bags), so sorting by
+// that number first would always bury the other categories.
 function sortNewestProducts(products: CatalogProduct[]) {
   return [...products].sort((a, b) => {
-    const codeDiff = productCodeNumber(b) - productCodeNumber(a);
-    if (codeDiff !== 0) return codeDiff;
     const timeDiff = newestTime(b) - newestTime(a);
     if (timeDiff !== 0) return timeDiff;
+    const codeDiff = productCodeNumber(b) - productCodeNumber(a);
+    if (codeDiff !== 0) return codeDiff;
     return String(b.product_code || "").localeCompare(String(a.product_code || ""));
   });
 }
@@ -330,21 +335,6 @@ export async function getD1FilterOptions(category = ALL_CATEGORY): Promise<Catal
   };
 }
 
-// Round-robins per-category lists (each already newest-first) instead of a
-// global sort, so the "All" view can't be swamped by whichever category has
-// the highest SKU counter (Apparel's counter runs far ahead of Shoes/Watches/
-// Bags, so a flat sort-by-code buried the other categories past page one).
-function interleaveByCategory(categoryRows: CatalogProduct[][]): CatalogProduct[] {
-  const merged: CatalogProduct[] = [];
-  const maxLength = categoryRows.reduce((max, rows) => Math.max(max, rows.length), 0);
-  for (let i = 0; i < maxLength; i++) {
-    for (const rows of categoryRows) {
-      if (rows[i]) merged.push(rows[i]);
-    }
-  }
-  return merged;
-}
-
 async function getLimitedNewArrivalsFromD1(
   page: number,
   pageSize: number,
@@ -352,7 +342,7 @@ async function getLimitedNewArrivalsFromD1(
   normalized: CatalogActiveFilters,
 ): Promise<CatalogProductsResult> {
   const perCategoryLimit = 50;
-  let cleanRows: CatalogProduct[];
+  let rows: CatalogProduct[] = [];
 
   if (normalized.category === ALL_CATEGORY) {
     const visibleHomeCategories = HOME_FEATURED_CATEGORIES.filter((category) =>
@@ -365,20 +355,22 @@ async function getLimitedNewArrivalsFromD1(
           page: 1,
           pageSize: perCategoryLimit,
         })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
-        return removeClearlyWrongProducts(sortNewestProducts((response.products || []).map(mapD1Product)));
+        return (response.products || []).map(mapD1Product);
       }),
     );
-    cleanRows = interleaveByCategory(batches).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
+    rows = batches.flat();
   } else {
     const response = await fetchJson<D1CatalogResponse>(`/latest${queryString({
       category: normalized.category,
       page: 1,
       pageSize: perCategoryLimit,
     })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
-    const rows = (response.products || []).map(mapD1Product);
-    cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
+    rows = (response.products || []).map(mapD1Product);
   }
 
+  // Global sort by true recency across the merged categories — this is what
+  // makes "All" reflect the real import order instead of category slots.
+  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   const total = cleanRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);

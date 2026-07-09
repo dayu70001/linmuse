@@ -12,7 +12,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import { getHomepageSettings, HOME_FEATURED_SLOTS } from "@/lib/homepageSettings";
+import { getHomepageSettings } from "@/lib/homepageSettings";
 import { getCatalogProducts, type CatalogProduct } from "@/lib/products";
 
 const trustPoints = [
@@ -95,29 +95,24 @@ function isValidHomeProduct(product: CatalogProduct): boolean {
   );
 }
 
-// Featured Picks / New Arrivals: pulls the single newest active+published
-// product per category live from the catalog data source (D1 or Supabase,
-// same source as /catalog and /new-arrivals) instead of a manually curated,
-// admin-edited product code — so newly imported watches/shoes/bags/apparel
-// show up automatically without an admin having to refresh a cached slot.
-async function getHomeFeaturedProducts(): Promise<CatalogProduct[]> {
-  const results = await Promise.all(
-    HOME_FEATURED_SLOTS.map(async (slot) => {
-      try {
-        const catalog = await getCatalogProducts({
-          category: slot.category,
-          page: 1,
-          pageSize: 20,
-          onlyNew: true,
-        });
-        return catalog.products.find(isValidHomeProduct) || null;
-      } catch {
-        return null;
-      }
-    })
-  );
+const HOME_FEATURED_COUNT = 4;
 
-  return results.filter((product): product is CatalogProduct => Boolean(product));
+// Featured Picks: the true latest active+published products across every
+// category, live from the catalog data source (D1 or Supabase — same source
+// and sort order as /catalog and /new-arrivals). Not one slot per category —
+// if the 4 most recently imported products are all watches, this shows 4
+// watches.
+async function getHomeFeaturedProducts(): Promise<CatalogProduct[]> {
+  try {
+    const catalog = await getCatalogProducts({
+      page: 1,
+      pageSize: 20,
+      onlyNew: true,
+    });
+    return catalog.products.filter(isValidHomeProduct).slice(0, HOME_FEATURED_COUNT);
+  } catch {
+    return [];
+  }
 }
 
 // Feedback preview uses shipping proof images from homepage settings
