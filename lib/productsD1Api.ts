@@ -330,6 +330,21 @@ export async function getD1FilterOptions(category = ALL_CATEGORY): Promise<Catal
   };
 }
 
+// Round-robins per-category lists (each already newest-first) instead of a
+// global sort, so the "All" view can't be swamped by whichever category has
+// the highest SKU counter (Apparel's counter runs far ahead of Shoes/Watches/
+// Bags, so a flat sort-by-code buried the other categories past page one).
+function interleaveByCategory(categoryRows: CatalogProduct[][]): CatalogProduct[] {
+  const merged: CatalogProduct[] = [];
+  const maxLength = categoryRows.reduce((max, rows) => Math.max(max, rows.length), 0);
+  for (let i = 0; i < maxLength; i++) {
+    for (const rows of categoryRows) {
+      if (rows[i]) merged.push(rows[i]);
+    }
+  }
+  return merged;
+}
+
 async function getLimitedNewArrivalsFromD1(
   page: number,
   pageSize: number,
@@ -337,7 +352,7 @@ async function getLimitedNewArrivalsFromD1(
   normalized: CatalogActiveFilters,
 ): Promise<CatalogProductsResult> {
   const perCategoryLimit = 50;
-  let rows: CatalogProduct[] = [];
+  let cleanRows: CatalogProduct[];
 
   if (normalized.category === ALL_CATEGORY) {
     const visibleHomeCategories = HOME_FEATURED_CATEGORIES.filter((category) =>
@@ -350,20 +365,20 @@ async function getLimitedNewArrivalsFromD1(
           page: 1,
           pageSize: perCategoryLimit,
         })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
-        return (response.products || []).map(mapD1Product);
+        return removeClearlyWrongProducts(sortNewestProducts((response.products || []).map(mapD1Product)));
       }),
     );
-    rows = batches.flat();
+    cleanRows = interleaveByCategory(batches).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   } else {
     const response = await fetchJson<D1CatalogResponse>(`/latest${queryString({
       category: normalized.category,
       page: 1,
       pageSize: perCategoryLimit,
     })}`, { revalidate: REVALIDATE_LATEST_SECONDS });
-    rows = (response.products || []).map(mapD1Product);
+    const rows = (response.products || []).map(mapD1Product);
+    cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   }
 
-  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   const total = cleanRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);

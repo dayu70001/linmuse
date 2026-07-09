@@ -432,6 +432,51 @@ function sortNewestProducts(products: CatalogProduct[]) {
 
 const NEW_ARRIVALS_TOTAL_LIMIT = 199;
 
+// Round-robins per-category lists (each already newest-first) instead of a
+// global sort, so the "All" view can't be swamped by whichever category has
+// the highest SKU counter (Apparel's counter runs far ahead of Shoes/Watches/
+// Bags, so a flat sort-by-code buried the other categories past page one).
+function interleaveByCategory(categoryRows: CatalogProduct[][]): CatalogProduct[] {
+  const merged: CatalogProduct[] = [];
+  const maxLength = categoryRows.reduce((max, rows) => Math.max(max, rows.length), 0);
+  for (let i = 0; i < maxLength; i++) {
+    for (const rows of categoryRows) {
+      if (rows[i]) merged.push(rows[i]);
+    }
+  }
+  return merged;
+}
+
+async function getMixedNewArrivalsProducts(
+  visibleHomeCategories: string[],
+  normalized: CatalogActiveFilters,
+  perCategoryLimit: number,
+): Promise<CatalogProduct[]> {
+  const batches = await Promise.all(
+    visibleHomeCategories.map((category) =>
+      fetchProducts(
+        buildCatalogPath(
+          {
+            ...normalized,
+            category,
+            subcategory: "",
+            brand: "",
+            model: "",
+          },
+          1,
+          perCategoryLimit,
+          true,
+          true,
+        ),
+        false,
+      ),
+    ),
+  );
+
+  const perCategoryRows = batches.map((batch) => removeClearlyWrongProducts(sortNewestProducts(batch.rows)));
+  return interleaveByCategory(perCategoryRows);
+}
+
 async function getLimitedNewArrivalsProducts(
   page: number,
   pageSize: number,
@@ -439,37 +484,18 @@ async function getLimitedNewArrivalsProducts(
   normalized: CatalogActiveFilters,
 ) {
   const perCategoryLimit = 50;
-  const offset = (page - 1) * pageSize;
 
-  let rows: CatalogProduct[] = [];
+  let cleanRows: CatalogProduct[];
 
   if (normalized.category === ALL_CATEGORY) {
     const visibleHomeCategories = HOME_FEATURED_CATEGORIES.filter((category) =>
       filterOptions.categories.includes(category),
     );
 
-    const batches = await Promise.all(
-      visibleHomeCategories.map((category) =>
-        fetchProducts(
-          buildCatalogPath(
-            {
-              ...normalized,
-              category,
-              subcategory: "",
-              brand: "",
-              model: "",
-            },
-            1,
-            perCategoryLimit,
-            true,
-            true,
-          ),
-          false,
-        ),
-      ),
+    cleanRows = (await getMixedNewArrivalsProducts(visibleHomeCategories, normalized, perCategoryLimit)).slice(
+      0,
+      NEW_ARRIVALS_TOTAL_LIMIT,
     );
-
-    rows = batches.flatMap((batch) => batch.rows);
   } else {
     const result = await fetchProducts(
       buildCatalogPath(
@@ -487,10 +513,9 @@ async function getLimitedNewArrivalsProducts(
       false,
     );
 
-    rows = result.rows;
+    cleanRows = removeClearlyWrongProducts(sortNewestProducts(result.rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   }
 
-  const cleanRows = removeClearlyWrongProducts(sortNewestProducts(rows)).slice(0, NEW_ARRIVALS_TOTAL_LIMIT);
   const total = cleanRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
