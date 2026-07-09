@@ -13,11 +13,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
 import { getHomepageSettings, HOME_FEATURED_SLOTS } from "@/lib/homepageSettings";
-import type { CatalogProduct } from "@/lib/products";
-import { getCatalogProductBySlugFromD1, isD1WorkerProductSource } from "@/lib/productsD1Api";
-
-type ProductCategory = string;
-type FeaturedCodes = Record<string, string>;
+import { getCatalogProducts, type CatalogProduct } from "@/lib/products";
 
 const trustPoints = [
   "Orders from 1 piece",
@@ -90,123 +86,38 @@ const productionCards = [
   },
 ];
 
-function buildNewArrivalSlots(featuredCodes: FeaturedCodes): Array<{ category: ProductCategory; productCode: string }> {
-  return HOME_FEATURED_SLOTS.map((slot) => ({
-    category: slot.category as ProductCategory,
-    productCode: featuredCodes[slot.key] || slot.fallback,
-  }));
+function isValidHomeProduct(product: CatalogProduct): boolean {
+  return Boolean(
+    product.product_code &&
+      product.slug &&
+      product.title_en &&
+      product.main_thumbnail_url
+  );
 }
 
-type HomeProductRow = {
-  product_code?: string | null;
-  slug?: string | null;
-  category?: string | null;
-  subcategory?: string | null;
-  title_en?: string | null;
-  title_cn?: string | null;
-  main_thumbnail_url?: string | null;
-  status?: string | null;
-  is_active?: boolean | null;
-  is_featured?: boolean | null;
-};
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-
-function mapHomeProductRow(row: HomeProductRow): CatalogProduct {
-  const image = row.main_thumbnail_url || "";
-  const productCode = row.product_code || "";
-
-  if (!productCode || !row.slug || !image) {
-    throw new Error(`Featured Picks product is missing required data: ${productCode || "unknown"}`);
-  }
-
-  return {
-    product_code: productCode,
-    slug: row.slug,
-    category: row.category as ProductCategory,
-    subcategory: row.subcategory || null,
-    title_en: row.title_en || row.title_cn || productCode,
-    title_cn: row.title_cn || null,
-    description_en: null,
-    sizes_display: null,
-    colors_display: null,
-    moq: null,
-    delivery_time: null,
-    main_image_url: image,
-    main_thumbnail_url: image,
-    gallery_image_urls: [],
-    gallery_thumbnail_urls: [],
-    image_count: null,
-    status: row.status || null,
-    is_active: row.is_active ?? null,
-    is_featured: row.is_featured ?? null,
-    badge: row.is_featured ? "Popular" : "New",
-  };
-}
-
-async function getHomeNewArrivals(featuredCodes: FeaturedCodes) {
-  const newArrivalSlots = buildNewArrivalSlots(featuredCodes);
-
-  if (isD1WorkerProductSource()) {
-    const d1Products = await Promise.all(
-      newArrivalSlots.map(async (slot) => {
-        try {
-          const product = await getCatalogProductBySlugFromD1(slot.productCode);
-          return product?.main_thumbnail_url ? { product } : null;
-        } catch {
-          return null;
-        }
-      })
-    );
-    const selected = d1Products.filter((item): item is { product: CatalogProduct } => Boolean(item));
-    if (selected.length > 0) {
-      return selected;
-    }
-  }
-
-  if (!supabaseUrl || !anonKey) {
-    return [];
-  }
-
-  const productCodes = newArrivalSlots.map((slot) => slot.productCode);
-  const select = [
-    "product_code",
-    "slug",
-    "category",
-    "subcategory",
-    "title_en",
-    "main_thumbnail_url",
-    "status",
-    "is_active",
-    "is_featured",
-  ].join(",");
-  try {
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/products?select=${select}&product_code=in.(${productCodes.join(",")})&is_active=eq.true&status=eq.published`,
-      {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-        },
-        next: { revalidate: 30 },
+// Featured Picks / New Arrivals: pulls the single newest active+published
+// product per category live from the catalog data source (D1 or Supabase,
+// same source as /catalog and /new-arrivals) instead of a manually curated,
+// admin-edited product code — so newly imported watches/shoes/bags/apparel
+// show up automatically without an admin having to refresh a cached slot.
+async function getHomeFeaturedProducts(): Promise<CatalogProduct[]> {
+  const results = await Promise.all(
+    HOME_FEATURED_SLOTS.map(async (slot) => {
+      try {
+        const catalog = await getCatalogProducts({
+          category: slot.category,
+          page: 1,
+          pageSize: 20,
+          onlyNew: true,
+        });
+        return catalog.products.find(isValidHomeProduct) || null;
+      } catch {
+        return null;
       }
-    );
+    })
+  );
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const rows = (await response.json()) as HomeProductRow[];
-    const productsByCode = new Map(rows.map((row) => [row.product_code, mapHomeProductRow(row)]));
-    const selected = newArrivalSlots
-      .map((slot) => productsByCode.get(slot.productCode))
-      .filter((product): product is CatalogProduct => Boolean(product));
-
-    return selected.map((product) => ({ product }));
-  } catch {
-    return [];
-  }
+  return results.filter((product): product is CatalogProduct => Boolean(product));
 }
 
 // Feedback preview uses shipping proof images from homepage settings
@@ -219,7 +130,7 @@ const feedbackPreviewImgKeys = [
 
 export default async function Home() {
   const homeSettings = await getHomepageSettings();
-  const newProducts = await getHomeNewArrivals(homeSettings.featuredCodes);
+  const newProducts = await getHomeFeaturedProducts();
 
   const telegram = homeSettings.social.telegram || siteConfig.telegramChannel;
   const whatsappGroup = homeSettings.social.whatsapp;
@@ -316,11 +227,9 @@ export default async function Home() {
           <SectionHeading eyebrow="New arrivals" title="Featured Picks" />
           {newProducts.length > 0 ? (
             <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-4">
-              {newProducts.map(({ product }) => {
-                const key = product.product_code;
-
-                return <ProductCard key={key} product={product} />;
-              })}
+              {newProducts.map((product) => (
+                <ProductCard key={product.product_code} product={product} />
+              ))}
             </div>
           ) : (
             <div className="mt-6 rounded-xl border border-line bg-white p-6 text-center text-sm font-semibold text-muted">
