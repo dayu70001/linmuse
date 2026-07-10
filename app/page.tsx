@@ -12,7 +12,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/config/site";
-import { getHomepageSettings } from "@/lib/homepageSettings";
+import { getHomepageSettings, HOME_FEATURED_SLOTS } from "@/lib/homepageSettings";
 import { getCatalogProducts, type CatalogProduct } from "@/lib/products";
 
 const trustPoints = [
@@ -95,24 +95,29 @@ function isValidHomeProduct(product: CatalogProduct): boolean {
   );
 }
 
-const HOME_FEATURED_COUNT = 4;
-
-// Featured Picks: the true latest active+published products across every
-// category, live from the catalog data source (D1 or Supabase — same source
-// and sort order as /catalog and /new-arrivals). Not one slot per category —
-// if the 4 most recently imported products are all watches, this shows 4
-// watches.
+// Featured Picks: one product per category (Apparel/Shoes/Watches/Bags),
+// each the newest active+published item in that category, live from the
+// catalog data source (D1 or Supabase — same source as /catalog and
+// /new-arrivals). No fixed SKUs and no admin-edited product code — so newly
+// imported watches/shoes/bags/apparel show up automatically.
 async function getHomeFeaturedProducts(): Promise<CatalogProduct[]> {
-  try {
-    const catalog = await getCatalogProducts({
-      page: 1,
-      pageSize: 20,
-      onlyNew: true,
-    });
-    return catalog.products.filter(isValidHomeProduct).slice(0, HOME_FEATURED_COUNT);
-  } catch {
-    return [];
-  }
+  const results = await Promise.all(
+    HOME_FEATURED_SLOTS.map(async (slot) => {
+      try {
+        const catalog = await getCatalogProducts({
+          category: slot.category,
+          page: 1,
+          pageSize: 20,
+          onlyNew: true,
+        });
+        return catalog.products.find(isValidHomeProduct) || null;
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return results.filter((product): product is CatalogProduct => Boolean(product));
 }
 
 // Feedback preview uses shipping proof images from homepage settings
