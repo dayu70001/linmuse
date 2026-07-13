@@ -15,6 +15,15 @@ const urls = [
   "/catalog?category=Watches",
   "/catalog?category=Bags",
   "/catalog?category=Accessories",
+  "/guides",
+  "/wholesale-clothing",
+  "/wholesale-shoes",
+  "/wholesale-bags",
+  "/wholesale-watches",
+  "/factory-direct-fashion",
+  "/small-order-wholesale",
+  "/boutique-fashion-supplier",
+  "/wholesale-fashion-europe",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
