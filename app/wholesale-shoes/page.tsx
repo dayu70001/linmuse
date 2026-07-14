@@ -110,6 +110,9 @@ const content: SeoLandingContent = {
         "Reference the original product code with your assigned sales contact, who can confirm current stock and any changes before processing a repeat order.",
     },
   ],
+  relatedCollections: [
+    { label: "Browse Current Sneakers", href: "/catalog/wholesale-sneakers" },
+  ],
 };
 
 export default function WholesaleShoesPage() {

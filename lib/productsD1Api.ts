@@ -8,6 +8,7 @@ import {
 } from "@/lib/catalogTaxonomy";
 import type {
   CatalogActiveFilters,
+  CatalogCollectionResult,
   CatalogFilters,
   CatalogFilterOptions,
   CatalogProduct,
@@ -428,6 +429,81 @@ export async function getCatalogProductsFromD1(filters: CatalogFilters = {}): Pr
     filters: normalized,
     filterOptions,
   };
+}
+
+export async function getCatalogCollectionProductsFromD1({
+  category,
+  subcategories,
+  page = 1,
+  pageSize = 25,
+}: {
+  category: string;
+  subcategories: string[];
+  page?: number | string | null;
+  pageSize?: number;
+}): Promise<CatalogCollectionResult> {
+  const requestedPage = parsePage(page);
+  const safePageSize = Math.max(1, Math.min(50, pageSize));
+  const filterOptions = await getD1FilterOptions(category);
+  const validSubcategories = [...new Set(subcategories.map(clean).filter((value) =>
+    filterOptions.subcategories.includes(value),
+  ))];
+
+  if (!filterOptions.categories.includes(category) || validSubcategories.length === 0) {
+    return { products: [], total: 0, page: 1, pageSize: safePageSize, totalPages: 1 };
+  }
+
+  try {
+    const firstPages = await Promise.all(validSubcategories.map(async (subcategory) => {
+      const response = await fetchJson<D1CatalogResponse>(`/catalog${queryString({
+        category,
+        subcategory,
+        page: 1,
+        pageSize: 50,
+      })}`, { revalidate: REVALIDATE_CATALOG_SECONDS });
+      return { subcategory, response };
+    }));
+
+    const total = firstPages.reduce((sum, item) => sum + Number(item.response.total || 0), 0);
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const safePage = Math.min(requestedPage, totalPages);
+    const requiredPerSubcategory = safePage * safePageSize;
+
+    const additionalPages = await Promise.all(firstPages.flatMap(({ subcategory, response }) => {
+      const subcategoryTotal = Number(response.total || 0);
+      const requiredPages = Math.min(
+        Math.ceil(subcategoryTotal / 50),
+        Math.ceil(requiredPerSubcategory / 50),
+      );
+      return Array.from({ length: Math.max(0, requiredPages - 1) }, (_, index) =>
+        fetchJson<D1CatalogResponse>(`/catalog${queryString({
+          category,
+          subcategory,
+          page: index + 2,
+          pageSize: 50,
+        })}`, { revalidate: REVALIDATE_CATALOG_SECONDS }),
+      );
+    }));
+
+    const products = [...firstPages.map((item) => item.response), ...additionalPages]
+      .flatMap((response) => response.products || [])
+      .map(mapD1Product)
+      .filter((product) => product.product_code && product.slug);
+    const uniqueProducts = [...new Map(
+      sortNewestProducts(products).map((product) => [product.product_code, product]),
+    ).values()];
+    const offset = (safePage - 1) * safePageSize;
+
+    return {
+      products: uniqueProducts.slice(offset, offset + safePageSize),
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages,
+    };
+  } catch {
+    return { products: [], total: 0, page: 1, pageSize: safePageSize, totalPages: 1 };
+  }
 }
 
 export async function getCatalogProductBySlugFromD1(slugOrCode: string) {

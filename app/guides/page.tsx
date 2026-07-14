@@ -39,6 +39,8 @@ const guideLinks = [
   { title: "Small Order Wholesale", href: "/small-order-wholesale", text: "Starting with a small order before scaling into a full wholesale quantity." },
   { title: "Boutique Fashion Supplier", href: "/boutique-fashion-supplier", text: "Building a curated boutique assortment across multiple categories." },
   { title: "Wholesale Fashion Supplier for Europe", href: "/wholesale-fashion-europe", text: "Shipping and delivery considerations for wholesale orders to Europe." },
+  { title: "How to Choose a Wholesale Supplier", href: "/how-to-choose-a-wholesale-supplier", text: "A practical framework for checking products, communication, order details, shipping responsibility, and risk signals." },
+  { title: "How to Start a Boutique", href: "/how-to-start-a-boutique", text: "Plan a focused opening assortment, test demand, manage product records, and expand inventory using real sales evidence." },
 ];
 
 export default function GuidesPage() {

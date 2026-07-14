@@ -10,11 +10,12 @@ const urls = [
   "/wholesale-guide",
   "/contact",
   "/catalog/bags",
-  "/catalog?category=Apparel",
-  "/catalog?category=Shoes",
-  "/catalog?category=Watches",
-  "/catalog?category=Bags",
-  "/catalog?category=Accessories",
+  "/catalog/wholesale-t-shirts",
+  "/catalog/wholesale-jackets-coats",
+  "/catalog/wholesale-sneakers",
+  "/catalog/wholesale-handbags",
+  "/catalog/wholesale-tote-bags",
+  "/catalog/wholesale-crossbody-bags",
   "/guides",
   "/wholesale-clothing",
   "/wholesale-shoes",
@@ -24,6 +25,8 @@ const urls = [
   "/small-order-wholesale",
   "/boutique-fashion-supplier",
   "/wholesale-fashion-europe",
+  "/how-to-choose-a-wholesale-supplier",
+  "/how-to-start-a-boutique",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

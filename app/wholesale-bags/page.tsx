@@ -110,6 +110,11 @@ const content: SeoLandingContent = {
         "Send the product code to your assigned sales contact, who will confirm current availability before you place the order.",
     },
   ],
+  relatedCollections: [
+    { label: "Browse Handbags", href: "/catalog/wholesale-handbags" },
+    { label: "Explore Tote Bags", href: "/catalog/wholesale-tote-bags" },
+    { label: "View Crossbody Bags", href: "/catalog/wholesale-crossbody-bags" },
+  ],
 };
 
 export default function WholesaleBagsPage() {

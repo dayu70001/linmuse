@@ -21,6 +21,7 @@ export type SeoLandingContent = {
   breadcrumbItems: BreadcrumbItem[];
   sections: SeoLandingSection[];
   faqs: FaqItem[];
+  relatedCollections?: Array<{ label: string; href: string }>;
 };
 
 const relatedLinks = [
@@ -31,7 +32,7 @@ const relatedLinks = [
 ];
 
 export function SeoLandingLayout({ content }: { content: SeoLandingContent }) {
-  const { eyebrow, h1, intro, breadcrumbItems, sections, faqs } = content;
+  const { eyebrow, h1, intro, breadcrumbItems, sections, faqs, relatedCollections = [] } = content;
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(breadcrumbItems);
   const faqJsonLd = buildFaqJsonLd(faqs);
 
@@ -73,6 +74,17 @@ export function SeoLandingLayout({ content }: { content: SeoLandingContent }) {
             <h2 className="font-serif text-2xl text-ink">Frequently Asked Questions</h2>
             <SeoFaq items={faqs} />
           </div>
+
+          {relatedCollections.length > 0 ? (
+            <div className="mt-10 border-t border-line pt-8">
+              <h2 className="font-serif text-2xl text-ink">Browse Related Product Collections</h2>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {relatedCollections.map((link) => (
+                  <Link className="btn-secondary" href={link.href} key={link.href}>{link.label}</Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

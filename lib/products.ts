@@ -12,6 +12,7 @@ import {
   sortSubcategories,
 } from "@/lib/catalogTaxonomy";
 import {
+  getCatalogCollectionProductsFromD1,
   getCatalogProductBySlugFromD1,
   getCatalogProductsFromD1,
   isD1WorkerProductSource,
@@ -101,6 +102,14 @@ export type CatalogProductsResult = {
   totalPages: number;
   filters: CatalogActiveFilters;
   filterOptions: CatalogFilterOptions;
+};
+
+export type CatalogCollectionResult = {
+  products: CatalogProduct[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 const catalogProductSelectWithClassification = [
@@ -566,6 +575,59 @@ export async function getCatalogProducts(filters: CatalogFilters = {}) {
     totalPages: 1,
     filters: normalized,
     filterOptions,
+  };
+}
+
+export async function getCatalogCollectionProducts({
+  category,
+  subcategories,
+  page = 1,
+  pageSize = 25,
+}: {
+  category: string;
+  subcategories: string[];
+  page?: number | string | null;
+  pageSize?: number;
+}): Promise<CatalogCollectionResult> {
+  if (isD1WorkerProductSource()) {
+    return getCatalogCollectionProductsFromD1({ category, subcategories, page, pageSize });
+  }
+
+  const requestedPage = parsePage(page);
+  const safePageSize = Math.max(1, pageSize);
+  const validSubcategories = [...new Set(
+    subcategories
+      .map(cleanTaxonomyValue)
+      .filter((subcategory) => isAllowedSubcategoryForCategory(category, subcategory)),
+  )];
+
+  if (validSubcategories.length === 0) {
+    return { products: [], total: 0, page: 1, pageSize: safePageSize, totalPages: 1 };
+  }
+
+  const params = [
+    `select=${catalogProductSelectWithClassification}`,
+    "is_active=eq.true",
+    "status=eq.published",
+    `category=eq.${encodeValue(category)}`,
+    validSubcategories.length === 1
+      ? `subcategory=eq.${encodeValue(validSubcategories[0])}`
+      : `subcategory=in.(${encodeInValues(validSubcategories)})`,
+    "order=product_code.desc,imported_at.desc.nullslast,created_at.desc.nullslast",
+    `offset=${(requestedPage - 1) * safePageSize}`,
+    `limit=${safePageSize}`,
+  ];
+  const result = await fetchProducts(`products?${params.join("&")}`, true);
+  const total = Number(result.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const safePage = Math.min(requestedPage, totalPages);
+
+  return {
+    products: removeClearlyWrongProducts(result.rows),
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages,
   };
 }
 

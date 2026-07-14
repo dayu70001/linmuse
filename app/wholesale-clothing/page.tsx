@@ -110,6 +110,10 @@ const content: SeoLandingContent = {
         "Product listings include general sizing notes where available. For precise measurements on a specific style, ask your sales contact before confirming quantities.",
     },
   ],
+  relatedCollections: [
+    { label: "Browse Wholesale T-Shirts", href: "/catalog/wholesale-t-shirts" },
+    { label: "Explore Jackets & Coats", href: "/catalog/wholesale-jackets-coats" },
+  ],
 };
 
 export default function WholesaleClothingPage() {
