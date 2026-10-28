@@ -221,42 +221,80 @@
             border-radius: 2px;
         }
 
-        /* Order Gallery carousel */
+        /* Customer Feedback carousel */
+        .order-gallery-description {
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #555;
+            margin: -8px 0 4px;
+        }
+
+        .order-gallery-privacy {
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #999;
+            margin: 0 0 16px;
+        }
+
+        .order-gallery-stage {
+            display: grid;
+            grid-template-columns: 36px 300px 36px;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
         .order-gallery-viewport {
-            width: 100%;
+            width: 300px;
+            height: 430px;
             overflow: hidden;
             border-radius: 8px;
+            background: #f3f4f6;
             touch-action: pan-y;
-            transition: height 0.25s ease;
         }
 
         .order-gallery-track {
             display: flex;
-            align-items: flex-start;
+            width: 100%;
+            height: 100%;
             transition: transform 0.3s ease;
             will-change: transform;
         }
 
         .order-gallery-slide {
+            display: flex;
             flex: 0 0 100%;
+            width: 100%;
+            height: 100%;
             min-width: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .order-gallery-image-button {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            background: transparent;
+            cursor: zoom-in;
         }
 
         .order-gallery-slide img {
             display: block;
-            width: 100%;
             max-width: 100%;
+            max-height: 100%;
+            width: auto;
             height: auto;
             object-fit: contain;
-            border-radius: 8px;
+            border-radius: 6px;
             user-select: none;
             -webkit-user-drag: none;
-        }
-
-        .order-gallery-controls {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 12px;
         }
 
         .order-gallery-arrow {
@@ -275,13 +313,133 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }
 
-        .order-gallery-arrow:focus-visible {
-            outline: 2px solid #2563eb;
+        .order-gallery-arrow:focus-visible,
+        .order-gallery-lightbox button:focus-visible {
+            outline: 2px solid #60a5fa;
             outline-offset: 2px;
         }
 
+        .order-gallery-lightbox[hidden] {
+            display: none;
+        }
+
+        .order-gallery-lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 56px 16px 72px;
+            background: rgba(0,0,0,0.88);
+        }
+
+        .order-gallery-lightbox-stage {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .order-gallery-lightbox-image {
+            display: block;
+            max-width: 92vw;
+            max-height: calc(100vh - 140px);
+            max-height: calc(100dvh - 140px);
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            transform: translate3d(0,0,0) scale(1);
+            transform-origin: center center;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .order-gallery-lightbox-close {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            display: inline-flex;
+            width: 42px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.55);
+            border-radius: 50%;
+            background: rgba(20,20,20,0.75);
+            color: #fff;
+            font-size: 26px;
+            cursor: pointer;
+        }
+
+        .order-gallery-lightbox-controls {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transform: translateX(-50%);
+            padding: 6px 10px;
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 24px;
+            background: rgba(20,20,20,0.78);
+        }
+
+        .order-gallery-lightbox-controls button {
+            display: inline-flex;
+            width: 36px;
+            height: 36px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.45);
+            border-radius: 50%;
+            background: transparent;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .order-gallery-zoom-level {
+            min-width: 48px;
+            color: #fff;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        @media (max-width: 480px) {
+            .order-gallery-stage {
+                grid-template-columns: 32px minmax(0, 1fr) 32px;
+                gap: 6px;
+            }
+
+            .order-gallery-viewport {
+                width: 100%;
+                height: 380px;
+            }
+
+            .order-gallery-arrow {
+                width: 32px;
+                height: 32px;
+                font-size: 18px;
+            }
+
+            .order-gallery-lightbox {
+                padding: 54px 8px 68px;
+            }
+
+            .order-gallery-lightbox-image {
+                max-width: 96vw;
+                max-height: calc(100vh - 122px);
+                max-height: calc(100dvh - 122px);
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
-            .order-gallery-viewport,
             .order-gallery-track {
                 transition: none;
             }
@@ -698,23 +856,37 @@ src="https://www.facebook.com/tr?id=1623320452535866&ev=PageView&noscript=1"
         </div>
         <!-- Order Gallery -->
         <div class="proof-section" style="margin: 24px 0; background: #fff; padding: 20px 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-            <div class="section-title">Order Gallery</div>
-            <div class="order-gallery" role="region" aria-label="Order Gallery" aria-roledescription="carousel">
-                <div class="order-gallery-viewport" id="orderGalleryViewport">
-                    <div class="order-gallery-track" id="orderGalleryTrack">
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="1 of 8"><img src="/assets/order-gallery/01.webp" alt="Order Gallery image 1" loading="eager"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="2 of 8"><img src="/assets/order-gallery/02.webp" alt="Order Gallery image 2" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="3 of 8"><img src="/assets/order-gallery/03.webp" alt="Order Gallery image 3" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="4 of 8"><img src="/assets/order-gallery/04.webp" alt="Order Gallery image 4" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="5 of 8"><img src="/assets/order-gallery/07.webp" alt="Order Gallery image 5" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="6 of 8"><img src="/assets/order-gallery/10.webp" alt="Order Gallery image 6" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="7 of 8"><img src="/assets/order-gallery/16.webp" alt="Order Gallery image 7" loading="lazy"></div>
-                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="8 of 8"><img src="/assets/order-gallery/19.webp" alt="Order Gallery image 8" loading="lazy"></div>
-                    </div>
-                </div>
-                <div class="order-gallery-controls">
+            <div class="section-title">Customer Feedback</div>
+            <p class="order-gallery-description">Real customer messages, delivery updates and product feedback.</p>
+            <p class="order-gallery-privacy">Customer details are blurred for privacy.</p>
+            <div class="order-gallery" role="region" aria-label="Customer Feedback" aria-roledescription="carousel">
+                <div class="order-gallery-stage">
                     <button class="order-gallery-arrow" type="button" id="orderGalleryPrevious" aria-label="Previous image">←</button>
+                    <div class="order-gallery-viewport" id="orderGalleryViewport" tabindex="0" aria-label="Customer feedback images">
+                        <div class="order-gallery-track" id="orderGalleryTrack">
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="1 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 1"><img src="/assets/order-gallery/01.webp" alt="Customer feedback image 1" loading="eager" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="2 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 2" tabindex="-1"><img src="/assets/order-gallery/02.webp" alt="Customer feedback image 2" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="3 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 3" tabindex="-1"><img src="/assets/order-gallery/03.webp" alt="Customer feedback image 3" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="4 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 4" tabindex="-1"><img src="/assets/order-gallery/04.webp" alt="Customer feedback image 4" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="5 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 5" tabindex="-1"><img src="/assets/order-gallery/07.webp" alt="Customer feedback image 5" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="6 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 6" tabindex="-1"><img src="/assets/order-gallery/10.webp" alt="Customer feedback image 6" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="7 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 7" tabindex="-1"><img src="/assets/order-gallery/16.webp" alt="Customer feedback image 7" loading="lazy" draggable="false"></button></div>
+                            <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="8 of 8"><button class="order-gallery-image-button" type="button" aria-label="Open image 8" tabindex="-1"><img src="/assets/order-gallery/19.webp" alt="Customer feedback image 8" loading="lazy" draggable="false"></button></div>
+                        </div>
+                    </div>
                     <button class="order-gallery-arrow" type="button" id="orderGalleryNext" aria-label="Next image">→</button>
+                </div>
+            </div>
+            <div class="order-gallery-lightbox" id="orderGalleryLightbox" role="dialog" aria-modal="true" aria-label="Expanded customer feedback image" hidden>
+                <button class="order-gallery-lightbox-close" type="button" id="orderGalleryLightboxClose" aria-label="Close expanded image">×</button>
+                <div class="order-gallery-lightbox-stage" id="orderGalleryLightboxStage">
+                    <img class="order-gallery-lightbox-image" id="orderGalleryLightboxImage" alt="" draggable="false">
+                </div>
+                <div class="order-gallery-lightbox-controls" aria-label="Image zoom controls">
+                    <button type="button" id="orderGalleryZoomOut" aria-label="Zoom out">−</button>
+                    <span class="order-gallery-zoom-level" id="orderGalleryZoomLevel" aria-live="polite">100%</span>
+                    <button type="button" id="orderGalleryZoomReset" aria-label="Reset zoom">↺</button>
+                    <button type="button" id="orderGalleryZoomIn" aria-label="Zoom in">+</button>
                 </div>
             </div>
         </div>
@@ -722,32 +894,101 @@ src="https://www.facebook.com/tr?id=1623320452535866&ev=PageView&noscript=1"
             (() => {
                 const viewport = document.getElementById('orderGalleryViewport');
                 const track = document.getElementById('orderGalleryTrack');
-                if (!viewport || !track) return;
+                const lightbox = document.getElementById('orderGalleryLightbox');
+                if (!viewport || !track || !lightbox) return;
 
                 const slides = Array.from(track.querySelectorAll('.order-gallery-slide'));
                 const previousButton = document.getElementById('orderGalleryPrevious');
                 const nextButton = document.getElementById('orderGalleryNext');
+                const lightboxImage = document.getElementById('orderGalleryLightboxImage');
+                const lightboxStage = document.getElementById('orderGalleryLightboxStage');
+                const closeButton = document.getElementById('orderGalleryLightboxClose');
+                const zoomOutButton = document.getElementById('orderGalleryZoomOut');
+                const zoomResetButton = document.getElementById('orderGalleryZoomReset');
+                const zoomInButton = document.getElementById('orderGalleryZoomIn');
+                const zoomLevel = document.getElementById('orderGalleryZoomLevel');
                 let currentIndex = 0;
                 let swipeStart = null;
+                let suppressClickUntil = 0;
+                let returnFocusTo = null;
+                let previousBodyOverflow = '';
+                let previousRootOverflow = '';
+                let zoomScale = 1;
+                let panX = 0;
+                let panY = 0;
+                let pinchStartDistance = 0;
+                let pinchStartScale = 1;
+                let panStart = null;
+                const pointers = new Map();
 
-                function updateGalleryHeight() {
-                    const image = slides[currentIndex]?.querySelector('img');
-                    if (image?.complete && image.naturalWidth) {
-                        viewport.style.height = `${image.getBoundingClientRect().height}px`;
-                    }
+                function clamp(value, min, max) {
+                    return Math.min(max, Math.max(min, value));
                 }
 
                 function showSlide(index) {
                     currentIndex = (index + slides.length) % slides.length;
                     track.style.transform = `translateX(-${currentIndex * 100}%)`;
                     slides.forEach((slide, slideIndex) => {
-                        slide.setAttribute('aria-hidden', slideIndex === currentIndex ? 'false' : 'true');
+                        const active = slideIndex === currentIndex;
+                        slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+                        slide.querySelector('.order-gallery-image-button').tabIndex = active ? 0 : -1;
                     });
-                    updateGalleryHeight();
+                }
+
+                function updateZoom() {
+                    zoomScale = clamp(zoomScale, 1, 4);
+                    if (zoomScale === 1) {
+                        panX = 0;
+                        panY = 0;
+                    }
+                    const maxX = Math.max(0, (lightboxImage.offsetWidth * zoomScale - lightboxStage.clientWidth) / 2);
+                    const maxY = Math.max(0, (lightboxImage.offsetHeight * zoomScale - lightboxStage.clientHeight) / 2);
+                    panX = clamp(panX, -maxX, maxX);
+                    panY = clamp(panY, -maxY, maxY);
+                    lightboxImage.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoomScale})`;
+                    lightboxImage.style.cursor = zoomScale > 1 ? 'grab' : 'zoom-in';
+                    zoomLevel.textContent = `${Math.round(zoomScale * 100)}%`;
+                }
+
+                function setZoom(value) {
+                    zoomScale = clamp(value, 1, 4);
+                    updateZoom();
+                }
+
+                function openLightbox(image, trigger) {
+                    returnFocusTo = trigger;
+                    lightboxImage.src = image.currentSrc || image.src;
+                    lightboxImage.alt = image.alt;
+                    zoomScale = 1;
+                    panX = 0;
+                    panY = 0;
+                    pointers.clear();
+                    lightbox.hidden = false;
+                    previousBodyOverflow = document.body.style.overflow;
+                    previousRootOverflow = document.documentElement.style.overflow;
+                    document.body.style.overflow = 'hidden';
+                    document.documentElement.style.overflow = 'hidden';
+                    updateZoom();
+                    closeButton.focus();
+                }
+
+                function closeLightbox() {
+                    if (lightbox.hidden) return;
+                    lightbox.hidden = true;
+                    document.body.style.overflow = previousBodyOverflow;
+                    document.documentElement.style.overflow = previousRootOverflow;
+                    pointers.clear();
+                    pinchStartDistance = 0;
+                    returnFocusTo?.focus();
                 }
 
                 slides.forEach(slide => {
-                    slide.querySelector('img').addEventListener('load', updateGalleryHeight);
+                    const trigger = slide.querySelector('.order-gallery-image-button');
+                    const image = trigger.querySelector('img');
+                    trigger.addEventListener('click', () => {
+                        if (performance.now() < suppressClickUntil) return;
+                        openLightbox(image, trigger);
+                    });
                 });
                 previousButton.addEventListener('click', () => showSlide(currentIndex - 1));
                 nextButton.addEventListener('click', () => showSlide(currentIndex + 1));
@@ -761,15 +1002,107 @@ src="https://www.facebook.com/tr?id=1623320452535866&ev=PageView&noscript=1"
                     const deltaY = event.clientY - swipeStart.y;
                     swipeStart = null;
                     if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+                    event.preventDefault();
+                    suppressClickUntil = performance.now() + 300;
+                    setTimeout(() => { suppressClickUntil = 0; }, 0);
                     showSlide(currentIndex + (deltaX < 0 ? 1 : -1));
                 });
                 viewport.addEventListener('pointercancel', () => { swipeStart = null; });
-                window.addEventListener('resize', updateGalleryHeight);
+                let horizontalWheelDelta = 0;
+                let horizontalWheelTimer = 0;
+                viewport.addEventListener('wheel', event => {
+                    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+                    event.preventDefault();
+                    horizontalWheelDelta += event.deltaX;
+                    window.clearTimeout(horizontalWheelTimer);
+                    horizontalWheelTimer = window.setTimeout(() => {
+                        if (Math.abs(horizontalWheelDelta) >= 24) {
+                            showSlide(currentIndex + (horizontalWheelDelta > 0 ? 1 : -1));
+                        }
+                        horizontalWheelDelta = 0;
+                    }, 90);
+                }, { passive: false });
+                viewport.addEventListener('keydown', event => {
+                    if (event.key === 'ArrowRight') showSlide(currentIndex + 1);
+                    if (event.key === 'ArrowLeft') showSlide(currentIndex - 1);
+                });
+
+                function pointerDistance() {
+                    const points = Array.from(pointers.values());
+                    if (points.length < 2) return 0;
+                    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+                }
+
+                lightboxStage.addEventListener('pointerdown', event => {
+                    try { lightboxStage.setPointerCapture(event.pointerId); } catch (_) {}
+                    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                    if (pointers.size === 2) {
+                        pinchStartDistance = Math.max(pointerDistance(), 1);
+                        pinchStartScale = zoomScale;
+                        panStart = null;
+                    } else if (zoomScale > 1) {
+                        panStart = { id: event.pointerId, x: event.clientX, y: event.clientY, panX, panY };
+                    }
+                });
+                lightboxStage.addEventListener('pointermove', event => {
+                    if (!pointers.has(event.pointerId)) return;
+                    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                    if (pointers.size >= 2 && pinchStartDistance) {
+                        setZoom(pinchStartScale * pointerDistance() / pinchStartDistance);
+                    } else if (panStart?.id === event.pointerId && zoomScale > 1) {
+                        panX = panStart.panX + event.clientX - panStart.x;
+                        panY = panStart.panY + event.clientY - panStart.y;
+                        updateZoom();
+                    }
+                });
+                function finishPointer(event) {
+                    pointers.delete(event.pointerId);
+                    if (pointers.size < 2) pinchStartDistance = 0;
+                    if (pointers.size === 1 && zoomScale > 1) {
+                        const [id, point] = Array.from(pointers.entries())[0];
+                        panStart = { id, x: point.x, y: point.y, panX, panY };
+                    } else if (pointers.size === 0) {
+                        panStart = null;
+                    }
+                }
+                lightboxStage.addEventListener('pointerup', finishPointer);
+                lightboxStage.addEventListener('pointercancel', finishPointer);
+                lightboxStage.addEventListener('wheel', event => {
+                    event.preventDefault();
+                    setZoom(zoomScale + (event.deltaY < 0 ? 0.2 : -0.2));
+                }, { passive: false });
+
+                closeButton.addEventListener('click', closeLightbox);
+                zoomOutButton.addEventListener('click', () => setZoom(zoomScale - 0.25));
+                zoomResetButton.addEventListener('click', () => setZoom(1));
+                zoomInButton.addEventListener('click', () => setZoom(zoomScale + 0.25));
+                lightbox.addEventListener('click', event => {
+                    if (event.target === lightbox || event.target === lightboxStage) closeLightbox();
+                });
+                document.addEventListener('keydown', event => {
+                    if (lightbox.hidden) return;
+                    if (event.key === 'Escape') {
+                        closeLightbox();
+                        return;
+                    }
+                    if (event.key === 'Tab') {
+                        const controls = [closeButton, zoomOutButton, zoomResetButton, zoomInButton];
+                        const first = controls[0];
+                        const last = controls[controls.length - 1];
+                        if (event.shiftKey && document.activeElement === first) {
+                            event.preventDefault();
+                            last.focus();
+                        } else if (!event.shiftKey && document.activeElement === last) {
+                            event.preventDefault();
+                            first.focus();
+                        }
+                    }
+                });
                 showSlide(0);
             })();
         </script>
         <div class="reviews">
-            <div class="section-title">Sample Reviews</div>
+            <div class="section-title">Customer Reviews</div>
             
             <div class="review-item">
                 <div class="review-stars">★★★★★</div>
