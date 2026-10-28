@@ -220,6 +220,72 @@
             background: linear-gradient(90deg, #2563eb, #128c7e);
             border-radius: 2px;
         }
+
+        /* Order Gallery carousel */
+        .order-gallery-viewport {
+            width: 100%;
+            overflow: hidden;
+            border-radius: 8px;
+            touch-action: pan-y;
+            transition: height 0.25s ease;
+        }
+
+        .order-gallery-track {
+            display: flex;
+            align-items: flex-start;
+            transition: transform 0.3s ease;
+            will-change: transform;
+        }
+
+        .order-gallery-slide {
+            flex: 0 0 100%;
+            min-width: 0;
+        }
+
+        .order-gallery-slide img {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            object-fit: contain;
+            border-radius: 8px;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .order-gallery-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+        }
+
+        .order-gallery-arrow {
+            display: inline-flex;
+            width: 36px;
+            height: 36px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e5e7eb;
+            border-radius: 50%;
+            background: #fff;
+            color: #1e40af;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .order-gallery-arrow:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .order-gallery-viewport,
+            .order-gallery-track {
+                transition: none;
+            }
+        }
         
         .review-item {
             background: #fff;
@@ -630,19 +696,78 @@ src="https://www.facebook.com/tr?id=1623320452535866&ev=PageView&noscript=1"
                 </div>
             </div>
         </div>
-        <!-- Payment Proof & Customer Feedback -->
+        <!-- Order Gallery -->
         <div class="proof-section" style="margin: 24px 0; background: #fff; padding: 20px 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
             <div class="section-title">Order Gallery</div>
-            <p style="text-align: center; font-size: 12px; color: #666; margin-bottom: 16px;">Gallery content will be updated soon.</p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/f2e9447ef30d1199b6b0e1a0260f2c8a.webp" alt="Payment 1" style="width: 100%; border-radius: 6px;" loading="lazy">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/4052c1ff03c15a93bce008f30cc354fa.webp" alt="Payment 2" style="width: 100%; border-radius: 6px;" loading="lazy">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/51d2db22be85863d4b2777ae128eb23f.webp" alt="Payment 3" style="width: 100%; border-radius: 6px;" loading="lazy">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/d3364fbca78ae5a180fea8b753d2094a.webp" alt="Payment 4" style="width: 100%; border-radius: 6px;" loading="lazy">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/a53e5edbf83abe9fbdb731a9fbdf73dc.webp" alt="Payment 5" style="width: 100%; border-radius: 6px;" loading="lazy">
-                <img src="https://www.dkbrand.vip/wp-content/uploads/2025/12/04b0326a565e97ffd01ab45d7bcb6746.webp" alt="Payment 6" style="width: 100%; border-radius: 6px;" loading="lazy">
+            <div class="order-gallery" role="region" aria-label="Order Gallery" aria-roledescription="carousel">
+                <div class="order-gallery-viewport" id="orderGalleryViewport">
+                    <div class="order-gallery-track" id="orderGalleryTrack">
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="1 of 8"><img src="/assets/order-gallery/01.webp" alt="Order Gallery image 1" loading="eager"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="2 of 8"><img src="/assets/order-gallery/02.webp" alt="Order Gallery image 2" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="3 of 8"><img src="/assets/order-gallery/03.webp" alt="Order Gallery image 3" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="4 of 8"><img src="/assets/order-gallery/04.webp" alt="Order Gallery image 4" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="5 of 8"><img src="/assets/order-gallery/07.webp" alt="Order Gallery image 5" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="6 of 8"><img src="/assets/order-gallery/10.webp" alt="Order Gallery image 6" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="7 of 8"><img src="/assets/order-gallery/16.webp" alt="Order Gallery image 7" loading="lazy"></div>
+                        <div class="order-gallery-slide" role="group" aria-roledescription="slide" aria-label="8 of 8"><img src="/assets/order-gallery/19.webp" alt="Order Gallery image 8" loading="lazy"></div>
+                    </div>
+                </div>
+                <div class="order-gallery-controls">
+                    <button class="order-gallery-arrow" type="button" id="orderGalleryPrevious" aria-label="Previous image">←</button>
+                    <button class="order-gallery-arrow" type="button" id="orderGalleryNext" aria-label="Next image">→</button>
+                </div>
             </div>
         </div>
+        <script>
+            (() => {
+                const viewport = document.getElementById('orderGalleryViewport');
+                const track = document.getElementById('orderGalleryTrack');
+                if (!viewport || !track) return;
+
+                const slides = Array.from(track.querySelectorAll('.order-gallery-slide'));
+                const previousButton = document.getElementById('orderGalleryPrevious');
+                const nextButton = document.getElementById('orderGalleryNext');
+                let currentIndex = 0;
+                let swipeStart = null;
+
+                function updateGalleryHeight() {
+                    const image = slides[currentIndex]?.querySelector('img');
+                    if (image?.complete && image.naturalWidth) {
+                        viewport.style.height = `${image.getBoundingClientRect().height}px`;
+                    }
+                }
+
+                function showSlide(index) {
+                    currentIndex = (index + slides.length) % slides.length;
+                    track.style.transform = `translateX(-${currentIndex * 100}%)`;
+                    slides.forEach((slide, slideIndex) => {
+                        slide.setAttribute('aria-hidden', slideIndex === currentIndex ? 'false' : 'true');
+                    });
+                    updateGalleryHeight();
+                }
+
+                slides.forEach(slide => {
+                    slide.querySelector('img').addEventListener('load', updateGalleryHeight);
+                });
+                previousButton.addEventListener('click', () => showSlide(currentIndex - 1));
+                nextButton.addEventListener('click', () => showSlide(currentIndex + 1));
+                viewport.addEventListener('pointerdown', event => {
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    swipeStart = { x: event.clientX, y: event.clientY };
+                });
+                viewport.addEventListener('pointerup', event => {
+                    if (!swipeStart) return;
+                    const deltaX = event.clientX - swipeStart.x;
+                    const deltaY = event.clientY - swipeStart.y;
+                    swipeStart = null;
+                    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+                    showSlide(currentIndex + (deltaX < 0 ? 1 : -1));
+                });
+                viewport.addEventListener('pointercancel', () => { swipeStart = null; });
+                window.addEventListener('resize', updateGalleryHeight);
+                showSlide(0);
+            })();
+        </script>
         <div class="reviews">
             <div class="section-title">Sample Reviews</div>
             
